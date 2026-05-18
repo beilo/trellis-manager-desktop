@@ -24,6 +24,13 @@ PYTHON_CANDIDATES = [
 
 
 def main() -> int:
+    if getattr(sys, "frozen", False):
+        # 独立分发包已内置 Python 和依赖，冻结环境中不能再创建二级 venv。
+        from main import main as run_app
+
+        run_app()
+        return 0
+
     python = ensure_compatible_python()
     if Path(python).resolve() != Path(sys.executable).resolve():
         os.execv(python, [python, str(Path(__file__).resolve())])

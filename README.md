@@ -73,6 +73,34 @@ open "dist/Trellis Manager.app"
 
 这个 `.app` 不是 PyInstaller 包，不内置 Python 运行时；它会把客户端源码和 `frontend/dist` 放进 app bundle，双击后用系统 Python 3.11+ 和 home 目录下的虚拟环境启动。
 
+## 打包独立 `.app`
+
+面向 macOS Apple 芯片分发时，使用独立包。它会把 Python 运行时、`pywebview` 依赖和前端静态资源一起打进 `.app`，用户不需要预装 Python 或联网安装 Python 依赖。
+
+先构建前端：
+
+```bash
+cd apps/trellis-manager-desktop/frontend
+pnpm install
+pnpm build
+```
+
+再打包独立 app：
+
+```bash
+cd apps/trellis-manager-desktop
+python3 scripts/build_standalone_app.py
+open "dist/standalone/Trellis Manager.app"
+```
+
+可分发压缩包会生成在：
+
+```bash
+apps/trellis-manager-desktop/dist/standalone/Trellis Manager-macos-arm64.zip
+```
+
+这个包未做 Apple Developer ID 签名和 notarize。正式公网分发还需要补签名、公证和 DMG 流程；内部小范围分发可以先用 zip。下载或更新 Trellis 工具仓库仍需要用户机器可访问 git 网络，且需要系统有可用的 `git`、`node` 和 `pnpm`。如果用户通过 nvm 安装 Node，客户端会按当前用户目录补充 `~/.nvm/versions/node/*/bin`，避免从 Finder 启动时拿不到终端 PATH。
+
 ## 验证
 
 ```bash
@@ -83,6 +111,7 @@ cd /Users/am/temp/Trellis
 python3 -m unittest discover apps/trellis-manager-desktop/tests -v
 python3 -m py_compile apps/trellis-manager-desktop/main.py apps/trellis-manager-desktop/launcher.py apps/trellis-manager-desktop/app/*.py apps/trellis-manager-desktop/scripts/*.py apps/trellis-manager-desktop/tests/*.py
 python3 apps/trellis-manager-desktop/scripts/build_app.py
+python3 apps/trellis-manager-desktop/scripts/build_standalone_app.py
 git diff --check
 ```
 

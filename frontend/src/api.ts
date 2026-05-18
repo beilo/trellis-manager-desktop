@@ -36,15 +36,26 @@ interface PywebviewAPI {
   open_directory(path: string): Promise<void>
 }
 
+function isPywebviewApiReady(candidate: PywebviewAPI | undefined): candidate is PywebviewAPI {
+  return typeof candidate?.get_platform_info === 'function'
+}
+
 function waitForPywebview(): Promise<PywebviewAPI> {
-  return new Promise((resolve) => {
-    if (window.pywebview?.api) {
+  return new Promise((resolve, reject) => {
+    const resolveWhenReady = () => {
+      const candidate = window.pywebview?.api
+      if (isPywebviewApiReady(candidate)) {
+        resolve(candidate)
+        return
+      }
+      reject(new Error(`pywebview API 未就绪：${Object.keys(candidate ?? {}).join(', ') || '空对象'}`))
+    }
+
+    if (isPywebviewApiReady(window.pywebview?.api)) {
       resolve(window.pywebview.api)
       return
     }
-    window.addEventListener('pywebviewready', () => {
-      resolve(window.pywebview!.api)
-    }, { once: true })
+    window.addEventListener('pywebviewready', resolveWhenReady, { once: true })
   })
 }
 

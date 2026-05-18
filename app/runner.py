@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shlex
 import subprocess
 import time
@@ -14,6 +15,44 @@ ALLOWED_EXECUTABLES = {
     "tl",
     "trellis",
 }
+
+
+def _node_version_key(path: Path) -> tuple[int, ...]:
+    version = path.parent.name.removeprefix("v")
+    parts: list[int] = []
+    for part in version.split("."):
+        if not part.isdigit():
+            break
+        parts.append(int(part))
+    return tuple(parts)
+
+
+def build_command_env(home_dir: Path | None = None) -> dict[str, str]:
+    home = home_dir or Path.home()
+    node_bins = sorted(
+        (home / ".nvm" / "versions" / "node").glob("v*/bin"),
+        key=_node_version_key,
+        reverse=True,
+    )
+    preferred_paths = [
+        home / ".beilo-trellis" / "bin",
+        home / ".local" / "bin",
+        *node_bins,
+        Path("/opt/homebrew/bin"),
+        Path("/opt/homebrew/sbin"),
+        Path("/usr/local/bin"),
+        Path("/usr/local/sbin"),
+        Path("/usr/bin"),
+        Path("/bin"),
+        Path("/usr/sbin"),
+        Path("/sbin"),
+    ]
+    env = os.environ.copy()
+    path_parts = [str(path) for path in preferred_paths if path.exists()]
+    path_parts.extend(env.get("PATH", "").split(os.pathsep))
+    # GUI .app 启动时 PATH 很短，这里显式去重并前置常见开发工具路径。
+    env["PATH"] = os.pathsep.join(dict.fromkeys(part for part in path_parts if part))
+    return env
 
 
 @dataclass(frozen=True)
@@ -44,8 +83,9 @@ class CommandResult:
 class CommandRunner:
     """只执行白名单命令，避免 UI 输入拼成任意 shell。"""
 
-    def __init__(self, allowed: set[str] | None = None) -> None:
+    def __init__(self, allowed: set[str] | None = None, env: dict[str, str] | None = None) -> None:
         self.allowed = allowed or ALLOWED_EXECUTABLES
+        self.env = env or build_command_env()
 
     def run(
         self,
@@ -68,6 +108,7 @@ class CommandRunner:
                 timeout=timeout,
                 shell=False,
                 check=False,
+                env=self.env,
             )
             return CommandResult(
                 command=executed,

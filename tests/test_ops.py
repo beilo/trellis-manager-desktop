@@ -31,6 +31,7 @@ from app.ops import (  # noqa: E402
     update_project,
 )
 from app.runner import CommandResult, CommandRunner  # noqa: E402
+from app.runner import build_command_env  # noqa: E402
 
 
 class FakeRunner:
@@ -119,6 +120,23 @@ class TrellisManagerOpsTest(unittest.TestCase):
             runner._prepare_command(["git", "status", "--short"]),  # noqa: SLF001
             ["git", "-c", "i18n.logOutputEncoding=UTF-8", "status", "--short"],
         )
+
+    def test_command_runner_env_includes_gui_app_tool_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            node_bin = home / ".nvm" / "versions" / "node" / "v22.13.0" / "bin"
+            node_bin.mkdir(parents=True)
+            (home / ".beilo-trellis" / "bin").mkdir(parents=True)
+            (home / ".local" / "bin").mkdir(parents=True)
+
+            env = build_command_env(home)
+            path_parts = env["PATH"].split(":")
+
+            self.assertEqual(path_parts[:3], [
+                str(home / ".beilo-trellis" / "bin"),
+                str(home / ".local" / "bin"),
+                str(node_bin),
+            ])
 
     def test_zshrc_path_write_is_backed_up_and_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
