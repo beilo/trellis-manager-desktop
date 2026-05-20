@@ -236,8 +236,8 @@ def check_tool_repo(repo_dir: Path = DEFAULT_REPO_DIR, runner: CommandRunner | N
     ahead: int | None = None
     behind: int | None = None
     if dirty:
-        status: Status = "warning"
-        message = "工具仓库有未提交变更，更新会被阻止。"
+        status: Status = "info"
+        message = "工具仓库有本地变更（如 lock 文件），更新时会自动暂存并恢复。"
     elif valid:
         fetch = runner.run(["git", "fetch", "origin", DISTRIBUTION_BRANCH], cwd=repo_dir, timeout=120)
         if fetch.ok:
@@ -304,16 +304,14 @@ def install_or_update_tool_repo(
         status = check_tool_repo(repo_dir, runner)
         if not status.is_git or not status.is_trellis_repo:
             raise OperationError(status.message, commands)
-        if status.dirty:
-            raise OperationError("工具仓库有未提交变更，请先自行处理后再更新。", commands)
-        for command, message in [
-            (["git", "fetch", "origin", DISTRIBUTION_BRANCH], "拉取远端分支失败。"),
-            (["git", "checkout", DISTRIBUTION_BRANCH], "切换分发分支失败。"),
-            (["git", "pull", "--ff-only", "origin", DISTRIBUTION_BRANCH], "更新工具仓库失败。"),
-        ]:
-            result = runner.run(command, cwd=repo_dir, timeout=120)
-            commands.append(result)
-            _raise_if_failed(result, message, commands)
+        # 使用 --autostash 自动暂存本地变更（如 lock 文件），更新后恢复
+        pull = runner.run(
+            ["git", "pull", "--autostash", "--ff-only", "origin", DISTRIBUTION_BRANCH],
+            cwd=repo_dir,
+            timeout=120,
+        )
+        commands.append(pull)
+        _raise_if_failed(pull, "更新工具仓库失败。", commands)
     for command, message, timeout in [
         (["pnpm", "install"], "安装依赖失败。", 600),
         (["pnpm", "--filter", "@mindfoldhq/trellis", "build"], "构建 Trellis CLI 失败。", 600),
