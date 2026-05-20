@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -30,11 +31,14 @@ def _find_frontend_dist() -> Path | None:
 def main() -> None:
     api = TrellisAPI()
 
-    frontend_dist = _find_frontend_dist()
+    # 显式环境变量优先于隐式回退（dist 不存在时）
+    use_dev = os.environ.get("TRELLIS_USE_DEV_SERVER", "").lower() in ("1", "true", "yes")
+    frontend_dist = None if use_dev else _find_frontend_dist()
+
     if frontend_dist:
         url = str(frontend_dist)
     else:
-        # 开发时若 dist 不存在则连接 Vite dev server。
+        # 使用 Vite dev server（显式或隐式回退）
         url = _FRONTEND_DEV
 
     window = webview.create_window(
@@ -47,7 +51,7 @@ def main() -> None:
         background_color="#f8fafc",
     )
     api.set_window(window)
-    webview.start(debug=frontend_dist is None)
+    webview.start(debug=use_dev or frontend_dist is None)
 
 
 if __name__ == "__main__":

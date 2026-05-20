@@ -10,18 +10,20 @@
 - 核心命令逻辑：`app/ops.py`
 - 启动器：`launcher.py` 负责创建 `~/.beilo-trellis/manager-app/.venv` 并安装 `requirements.txt`
 
-`main.py` 会优先加载 `frontend/dist/index.html`；如果没有构建产物，则退回到 Vite dev server：`http://localhost:5173`。
+`main.py` 支持通过 `TRELLIS_USE_DEV_SERVER=1` 环境变量强制使用 Vite dev server；否则优先加载 `frontend/dist/index.html`（不存在时回退到 dev server）。
 
 ## 运行
 
-已有 `frontend/dist` 时，直接启动：
+### 开发模式（推荐）
+
+前端改动后由 Vite HMR 即时生效：
 
 ```bash
 cd apps/trellis-manager-desktop
-python3 launcher.py
+./run.sh dev
 ```
 
-开发前端时，先启动 Vite：
+或者手动分步操作：
 
 ```bash
 cd apps/trellis-manager-desktop/frontend
@@ -29,7 +31,29 @@ pnpm install
 pnpm dev
 ```
 
-然后另开终端启动桌面壳：
+然后另开终端：
+
+```bash
+cd apps/trellis-manager-desktop
+python3 launcher.py
+```
+
+### 构建模式（生产）
+
+```bash
+cd apps/trellis-manager-desktop
+./run.sh build
+```
+
+或者手动分步操作：
+
+```bash
+cd apps/trellis-manager-desktop/frontend
+pnpm install
+pnpm build
+```
+
+然后启动：
 
 ```bash
 cd apps/trellis-manager-desktop

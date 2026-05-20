@@ -499,7 +499,9 @@ export default function App() {
           onTabChange={handleTabChange}
         />
 
-        <SummaryCards state={summaryState} showProject={activeTab === 'projects'} />
+        {activeTab === 'toolchain' && (
+          <SummaryCards state={summaryState} showProject={false} />
+        )}
 
         {activeTab === 'toolchain' ? (
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
