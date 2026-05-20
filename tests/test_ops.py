@@ -15,8 +15,11 @@ from app.config import (  # noqa: E402
     OFFICIAL_REPO_URL,
     PATH_EXPORT_LINE,
     ManagerConfig,
+    add_project,
     load_config,
+    remove_project,
     save_config,
+    save_projects,
 )
 from app.ops import (  # noqa: E402
     OperationError,
@@ -237,10 +240,58 @@ class TrellisManagerOpsTest(unittest.TestCase):
             first = Path(tmp) / "a"
             second = Path(tmp) / "b"
 
-            save_config(ManagerConfig(trellis_repo=Path(tmp), recent_projects=[first, second, first]), config_file)
+            save_config(
+                ManagerConfig(
+                    trellis_repo=Path(tmp),
+                    projects=[first, second, first],
+                    last_selected_project=second,
+                    recent_projects=[first, second, first],
+                ),
+                config_file,
+            )
             loaded = load_config(config_file)
 
+            self.assertEqual(loaded.projects, [first, second])
+            self.assertEqual(loaded.last_selected_project, second)
             self.assertEqual(loaded.recent_projects, [first, second])
+
+    def test_config_migrates_recent_projects_to_projects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_file = Path(tmp) / "config.json"
+            first = Path(tmp) / "a"
+            second = Path(tmp) / "b"
+            config_file.write_text(
+                json.dumps(
+                    {
+                        "trellis_repo": str(Path(tmp) / "Trellis"),
+                        "recent_projects": [str(first), str(second), str(first)],
+                    },
+                ),
+                encoding="utf-8",
+            )
+
+            loaded = load_config(config_file)
+
+            self.assertEqual(loaded.projects, [first, second])
+            self.assertIsNone(loaded.last_selected_project)
+
+    def test_project_list_helpers_persist_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_file = Path(tmp) / "config.json"
+            first = Path(tmp) / "a"
+            second = Path(tmp) / "b"
+
+            add_project(first, config_file)
+            add_project(second, config_file)
+            loaded = save_projects([first, second, first], config_file, last_selected_project=second)
+
+            self.assertEqual(loaded.projects, [first, second])
+            self.assertEqual(loaded.last_selected_project, second)
+
+            loaded = remove_project(second, config_file)
+
+            self.assertEqual(loaded.projects, [first])
+            self.assertEqual(loaded.last_selected_project, first)
 
     def test_launcher_checks_homebrew_python_candidates(self) -> None:
         self.assertIn("/opt/homebrew/bin/python3", launcher.PYTHON_CANDIDATES)

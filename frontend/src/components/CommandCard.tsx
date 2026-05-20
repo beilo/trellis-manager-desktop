@@ -10,6 +10,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { StatusBadge } from './StatusBadge'
+import { StepBadge, type StepStatus } from './StepBadge'
 import type { ToolCommandStatus } from '@/types'
 
 interface CommandCardProps {
@@ -19,16 +20,22 @@ interface CommandCardProps {
 }
 
 export function CommandCard({ items, loading, onRefresh }: CommandCardProps) {
+  let stepStatus: StepStatus = 'idle'
+  if (loading) {
+    stepStatus = 'loading'
+  } else if (items.length > 0) {
+    const allOk = items.every((i) => i.status === 'ok')
+    stepStatus = allOk ? 'ok' : 'error'
+  }
+
   return (
-    <Card className="flex-1 min-w-0 transition-all duration-200 hover:ring-foreground/15">
+    <Card className="premium-card">
       <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
         <div className="flex items-center gap-3">
-          <div className={`flex size-9 items-center justify-center rounded-full bg-blue-50 text-sm font-extrabold text-blue-600 shrink-0 transition-all duration-300 ${loading ? 'animate-pulse ring-2 ring-blue-300/60' : ''}`}>
-            3
-          </div>
+          <StepBadge step={3} status={stepStatus} />
           <div className="flex flex-col gap-0.5">
-            <span className="text-base font-bold text-foreground">命令入口</span>
-            <span className="text-xs text-muted-foreground">wrapper 指向本地工具仓库，不依赖 npm link。</span>
+            <span className="text-base font-bold text-foreground select-none">命令入口</span>
+            <span className="text-xs text-muted-foreground select-none">全局快捷命令入口及可用性检测。</span>
           </div>
         </div>
         <Button

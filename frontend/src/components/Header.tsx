@@ -1,18 +1,23 @@
 import { StatusBadge } from './StatusBadge'
-import type { PlatformInfo, Status } from '@/types'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { FolderGit2, Wrench } from 'lucide-react'
+import type { ActiveTab, PlatformInfo, Status } from '@/types'
 
 interface HeaderProps {
   platformInfo: PlatformInfo | null
   readyStatus: Status
+  activeTab: ActiveTab
+  onTabChange: (tab: ActiveTab) => void
 }
 
-export function Header({ platformInfo, readyStatus }: HeaderProps) {
+export function Header({ platformInfo, readyStatus, activeTab, onTabChange }: HeaderProps) {
   const platformLabel = platformInfo?.is_macos ? 'macOS' : '非 macOS'
   const platformStatus: Status = platformInfo?.is_macos ? 'ok' : 'error'
   const pythonLabel = platformInfo ? `Python ${platformInfo.python_version}` : 'Python 3'
 
   return (
-    <div className="flex items-start justify-between gap-4 pb-4">
+    <div className="flex flex-col gap-4 pb-4 lg:flex-row lg:items-start lg:justify-between">
       <div className="flex flex-col gap-1.5">
         <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
           团队 Trellis 工具链管理
@@ -22,13 +27,45 @@ export function Header({ platformInfo, readyStatus }: HeaderProps) {
         </p>
       </div>
 
-      <div className="flex items-center gap-2 pt-1 shrink-0">
-        <StatusBadge status={platformStatus} label={platformLabel} />
-        <StatusBadge status="ok" label={pythonLabel} />
-        <StatusBadge
-          status={readyStatus}
-          label={readyStatus === 'ok' ? '可用' : '待处理'}
-        />
+      <div className="flex flex-wrap items-center justify-start gap-2 pt-1 lg:justify-end">
+        <div className="flex items-center rounded-lg border bg-muted/40 p-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onTabChange('toolchain')}
+            className={cn(
+              'h-8 transition-all duration-150',
+              activeTab === 'toolchain'
+                ? 'bg-blue-500 text-white shadow-md font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+            )}
+          >
+            <Wrench data-icon="inline-start" />
+            工具链
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onTabChange('projects')}
+            className={cn(
+              'h-8 transition-all duration-150',
+              activeTab === 'projects'
+                ? 'bg-blue-500 text-white shadow-md font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+            )}
+          >
+            <FolderGit2 data-icon="inline-start" />
+            项目
+          </Button>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <StatusBadge status={platformStatus} label={platformLabel} />
+          <StatusBadge status="ok" label={pythonLabel} />
+          <StatusBadge
+            status={readyStatus}
+            label={readyStatus === 'ok' ? '可用' : '待处理'}
+          />
+        </div>
       </div>
     </div>
   )

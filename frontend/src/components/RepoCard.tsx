@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { AppInput } from './AppInput'
 import { StatusBadge } from './StatusBadge'
+import { StepBadge, type StepStatus } from './StepBadge'
 import type { RepoStatus } from '@/types'
 
 interface RepoCardProps {
@@ -28,6 +29,15 @@ export function RepoCard({
 }: RepoCardProps) {
   const repoStatus = status?.status ?? 'unknown'
 
+  let stepStatus: StepStatus = 'idle'
+  if (busy || loading) {
+    stepStatus = 'loading'
+  } else if (status) {
+    if (status.status === 'ok') stepStatus = 'ok'
+    else if (status.status === 'warning') stepStatus = 'warning'
+    else if (status.status === 'error') stepStatus = 'error'
+  }
+
   let detailText = '未检查'
   if (status) {
     if (!status.exists) {
@@ -45,15 +55,13 @@ export function RepoCard({
   }
 
   return (
-    <Card className="transition-all duration-200 hover:ring-foreground/15">
+    <Card className="premium-card">
       <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
         <div className="flex items-center gap-3">
-          <div className={`flex size-9 items-center justify-center rounded-full bg-blue-50 text-sm font-extrabold text-blue-600 shrink-0 transition-all duration-300 ${busy ? 'animate-pulse ring-2 ring-blue-300/60' : ''}`}>
-            2
-          </div>
+          <StepBadge step={2} status={stepStatus} />
           <div className="flex flex-col gap-0.5">
-            <span className="text-base font-bold text-foreground">Trellis 工具仓库</span>
-            <span className="text-xs text-muted-foreground">先下载/更新，再安装依赖并构建 CLI。</span>
+            <span className="text-base font-bold text-foreground select-none">Trellis 工具仓库</span>
+            <span className="text-xs text-muted-foreground select-none">下载更新工具源并完成编译。</span>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Wrench, FolderGit2 } from 'lucide-react'
 import { Header } from './components/Header'
@@ -8,9 +7,11 @@ import { EnvironmentCard } from './components/EnvironmentCard'
 import { RepoCard } from './components/RepoCard'
 import { CommandCard } from './components/CommandCard'
 import { ProjectCard } from './components/ProjectCard'
+import { ProjectList } from './components/ProjectList'
 import { LogPanel } from './components/LogPanel'
 import { api } from './api'
 import type {
+  ActiveTab,
   EnvironmentItem,
   LogEntry,
   LogLevel,
@@ -22,6 +23,8 @@ import type {
   Status,
   ToolCommandStatus,
 } from './types'
+
+const LAST_TAB_KEY = 'trellis-manager:last-active-tab'
 
 let logIdSeq = 0
 function mkLog(level: LogLevel, text: string): LogEntry {
@@ -54,32 +57,52 @@ function operationLogToEntries(entry: OperationLogEntry): LogEntry[] {
   return entries
 }
 
+function getInitialTab(): ActiveTab {
+  return window.localStorage.getItem(LAST_TAB_KEY) === 'toolchain' ? 'toolchain' : 'projects'
+}
+
+function dedupeProjects(paths: string[]): string[] {
+  const seen = new Set<string>()
+  return paths.filter((path) => {
+    const normalized = path.trim()
+    if (!normalized || seen.has(normalized)) return false
+    seen.add(normalized)
+    return true
+  })
+}
+
+function projectName(path: string): string {
+  const normalized = path.replace(/[\\/]+$/, '')
+  return normalized.split(/[\\/]/).pop() || normalized
+}
+
 export default function App() {
   const [platformInfo, setPlatformInfo] = useState<PlatformInfo | null>(null)
-  const [recentProjects, setRecentProjects] = useState<string[]>([])
+  const [activeTab, setActiveTab] = useState<ActiveTab>(getInitialTab)
 
-  // Environment
+  // 环境检查
   const [envItems, setEnvItems] = useState<EnvironmentItem[]>([])
   const [envLoading, setEnvLoading] = useState(false)
 
-  // Repo
+  // 工具仓库
   const [repoPath, setRepoPath] = useState('')
   const [repoStatus, setRepoStatus] = useState<RepoStatus | null>(null)
   const [repoLoading, setRepoLoading] = useState(false)
   const [repoBusy, setRepoBusy] = useState(false)
 
-  // Commands
+  // 命令入口
   const [cmdItems, setCmdItems] = useState<ToolCommandStatus[]>([])
   const [cmdLoading, setCmdLoading] = useState(false)
 
-  // Project
-  const [projectPath, setProjectPath] = useState('')
-  const [projectStatus, setProjectStatus] = useState<ProjectStatus | null>(null)
+  // 多项目状态
+  const [projects, setProjects] = useState<string[]>([])
+  const [selectedProject, setSelectedProject] = useState<string | null>(null)
+  const [projectStatuses, setProjectStatuses] = useState<Record<string, ProjectStatus>>({})
   const [projectLoading, setProjectLoading] = useState(false)
   const [projectBusy, setProjectBusy] = useState(false)
   const [allowDirty, setAllowDirty] = useState(false)
 
-  // Logs
+  // 操作日志
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
 
   const addLogs = useCallback((...entries: LogEntry[]) => {
@@ -90,7 +113,9 @@ export default function App() {
     addLogs(mkLog(level, text))
   }, [addLogs])
 
-  // ── Summary state ──
+  // ── 顶部状态摘要 ──
+
+  const selectedProjectStatus = selectedProject ? projectStatuses[selectedProject] ?? null : null
 
   const getEnvSummary = (): { value: string; status: Status } => {
     if (!envItems.length) return { value: '未检查', status: 'unknown' }
@@ -120,10 +145,13 @@ export default function App() {
   }
 
   const getProjectSummary = (): { value: string; status: Status } => {
-    if (!projectStatus?.path) return { value: '未选择', status: 'unknown' }
+    if (!selectedProject) return { value: '未选择', status: 'unknown' }
+    if (!selectedProjectStatus?.path) {
+      return { value: projectName(selectedProject), status: 'unknown' }
+    }
     return {
-      value: projectStatus.has_trellis ? '已安装' : '待 Init',
-      status: projectStatus.status,
+      value: projectName(selectedProjectStatus.path),
+      status: selectedProjectStatus.status,
     }
   }
 
@@ -146,48 +174,7 @@ export default function App() {
   const readyStatus: Status =
     envSummary.status === 'ok' ? 'ok' : envItems.length > 0 ? 'error' : 'unknown'
 
-  // ── Init ──
-
-  const initialized = useRef(false)
-
-  useEffect(() => {
-    if (initialized.current) return
-    initialized.current = true
-
-    void (async () => {
-      try {
-        const [pi, cfg, logs, recent] = await Promise.all([
-          api.getPlatformInfo(),
-          api.getConfig(),
-          api.getLogs(),
-          api.getRecentProjects(),
-        ])
-
-        setPlatformInfo(pi)
-        setRepoPath(cfg.trellis_repo)
-        setRecentProjects(recent)
-
-        if (!pi.is_macos) {
-          addLog('info', '当前客户端第一版只支持 macOS。')
-        }
-
-        if (logs.length) {
-          addLog('info', '== 最近操作记录 ==')
-          addLogs(...logs.slice(0, 20).flatMap(operationLogToEntries))
-        }
-
-        // Initial checks
-        checkEnvironmentInner()
-        checkRepoInner(cfg.trellis_repo)
-        checkCommandsInner()
-      } catch (err) {
-        addLog('error', `初始化失败：${err}`)
-      }
-    })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // ── Environment ──
+  // ── 环境检查 ──
 
   const checkEnvironmentInner = useCallback(async () => {
     setEnvLoading(true)
@@ -205,7 +192,7 @@ export default function App() {
     }
   }, [addLog])
 
-  // ── Repo ──
+  // ── 工具仓库 ──
 
   const checkRepoInner = useCallback(async (path: string) => {
     setRepoLoading(true)
@@ -241,21 +228,7 @@ export default function App() {
     }
   }, [repoPath, addLog, addLogs, checkRepoInner])
 
-  const handleCreateWrappers = useCallback(async () => {
-    setRepoBusy(true)
-    addLog('task', '== 创建命令入口 ==')
-    try {
-      const report = await api.ensureWrappersAndPath(repoPath)
-      addLogs(...reportToLogs(report))
-      checkCommandsInner()
-    } catch (err) {
-      addLog('error', `失败：创建命令入口 - ${err}`)
-    } finally {
-      setRepoBusy(false)
-    }
-  }, [repoPath, addLog, addLogs])
-
-  // ── Commands ──
+  // ── 命令入口 ──
 
   const checkCommandsInner = useCallback(async () => {
     setCmdLoading(true)
@@ -279,55 +252,148 @@ export default function App() {
     }
   }, [addLog])
 
-  // ── Project ──
-
-  const handleBrowse = useCallback(async () => {
-    const selected = await api.selectDirectory()
-    if (!selected) return
-    setProjectPath(selected)
-    handleCheckProject(selected)
-  }, [])
-
-  const handleCheckProject = useCallback(async (path?: string) => {
-    const p = path ?? projectPath
-    if (!p) return
-    setProjectLoading(true)
-    addLog('task', '== 检查业务项目 ==')
+  const handleCreateWrappers = useCallback(async () => {
+    setRepoBusy(true)
+    addLog('task', '== 创建命令入口 ==')
     try {
-      const status = await api.inspectProject(p)
-      setProjectStatus(status)
-      addLog('success', `完成：检查业务项目 - ${status.status}：${status.message}`)
-      if (status.path) {
-        await api.rememberProject(status.path)
-        const recent = await api.getRecentProjects()
-        setRecentProjects(recent)
-      }
+      const report = await api.ensureWrappersAndPath(repoPath)
+      addLogs(...reportToLogs(report))
+      checkCommandsInner()
     } catch (err) {
-      addLog('error', `失败：检查业务项目 - ${err}`)
+      addLog('error', `失败：创建命令入口 - ${err}`)
+    } finally {
+      setRepoBusy(false)
+    }
+  }, [repoPath, addLog, addLogs, checkCommandsInner])
+
+  // ── 项目管理 ──
+
+  const inspectProjectInner = useCallback(async (path: string, silent = false) => {
+    setProjectLoading(true)
+    if (!silent) addLog('task', '== 检查业务项目 ==')
+    try {
+      const status = await api.inspectProject(path)
+      setProjectStatuses((prev) => ({ ...prev, [path]: status }))
+      if (!silent) {
+        addLog('success', `完成：检查业务项目 - ${status.status}：${status.message}`)
+      }
+      return status
+    } catch (err) {
+      if (!silent) addLog('error', `失败：检查业务项目 - ${err}`)
+      throw err
     } finally {
       setProjectLoading(false)
     }
-  }, [projectPath, addLog])
+  }, [addLog])
+
+  const inspectProjectsInner = useCallback(async (paths: string[]) => {
+    setProjectLoading(true)
+    try {
+      const entries = await Promise.all(
+        paths.map(async (path) => {
+          try {
+            return [path, await api.inspectProject(path)] as const
+          } catch (err) {
+            addLog('error', `失败：检查项目 ${path} - ${err}`)
+            return null
+          }
+        }),
+      )
+      const next = Object.fromEntries(
+        entries.filter((entry): entry is readonly [string, ProjectStatus] => entry !== null),
+      )
+      setProjectStatuses((prev) => ({ ...prev, ...next }))
+    } finally {
+      setProjectLoading(false)
+    }
+  }, [addLog])
+
+  const handleTabChange = useCallback((tab: ActiveTab) => {
+    setActiveTab(tab)
+    window.localStorage.setItem(LAST_TAB_KEY, tab)
+  }, [])
+
+  const handleCheckProject = useCallback(async (path?: string) => {
+    const p = path ?? selectedProject
+    if (!p) return
+    await inspectProjectInner(p)
+  }, [selectedProject, inspectProjectInner])
+
+  const handleAddProject = useCallback(async () => {
+    const selected = await api.selectDirectory()
+    if (!selected) return
+
+    setProjectBusy(true)
+    addLog('task', '== 添加业务项目 ==')
+    try {
+      const status = await api.addProject(selected)
+      const path = status.path ?? selected
+      const nextProjects = dedupeProjects([...projects, path])
+      setProjects(nextProjects)
+      setSelectedProject(path)
+      setProjectStatuses((prev) => ({ ...prev, [path]: status }))
+      await api.saveSelectedProject(path)
+      addLog('success', `完成：添加业务项目 - ${status.status}：${status.message}`)
+    } catch (err) {
+      addLog('error', `失败：添加业务项目 - ${err}`)
+    } finally {
+      setProjectBusy(false)
+    }
+  }, [projects, addLog])
+
+  const handleRemoveProject = useCallback(async (path: string) => {
+    setProjectBusy(true)
+    addLog('task', '== 移除业务项目 ==')
+    try {
+      await api.removeProject(path)
+      const nextProjects = projects.filter((project) => project !== path)
+      const nextSelected = selectedProject === path ? nextProjects[0] ?? null : selectedProject
+      setProjects(nextProjects)
+      setSelectedProject(nextSelected)
+      setProjectStatuses((prev) => {
+        const rest = { ...prev }
+        delete rest[path]
+        return rest
+      })
+      await api.saveSelectedProject(nextSelected)
+      if (nextSelected && !projectStatuses[nextSelected]) {
+        await inspectProjectInner(nextSelected, true)
+      }
+      addLog('success', `完成：移除业务项目 - ${path}`)
+    } catch (err) {
+      addLog('error', `失败：移除业务项目 - ${err}`)
+    } finally {
+      setProjectBusy(false)
+    }
+  }, [projects, selectedProject, projectStatuses, addLog, inspectProjectInner])
+
+  const handleSelectProject = useCallback(async (path: string) => {
+    setSelectedProject(path)
+    await api.saveSelectedProject(path)
+    if (!projectStatuses[path]) {
+      await inspectProjectInner(path, true)
+    }
+  }, [projectStatuses, inspectProjectInner])
 
   const handleInitProject = useCallback(async () => {
-    if (!projectPath) return
+    if (!selectedProject) return
     setProjectBusy(true)
     addLog('task', '== 初始化业务项目 ==')
     try {
-      const report = await api.initProject(projectPath)
+      const report = await api.initProject(selectedProject)
       addLogs(...reportToLogs(report))
-      handleCheckProject(projectPath)
+      await inspectProjectInner(selectedProject, true)
     } catch (err) {
       addLog('error', `失败：初始化业务项目 - ${err}`)
     } finally {
       setProjectBusy(false)
     }
-  }, [projectPath, addLog, addLogs, handleCheckProject])
+  }, [selectedProject, addLog, addLogs, inspectProjectInner])
 
   const handleUpdateProject = useCallback(async () => {
-    if (!projectPath) return
+    if (!selectedProject) return
 
-    if (projectStatus?.dirty && !allowDirty) {
+    if (selectedProjectStatus?.dirty && !allowDirty) {
       const confirmed = window.confirm('项目有未提交变更，继续执行 tl update --force？')
       if (!confirmed) return
     }
@@ -335,29 +401,78 @@ export default function App() {
     setProjectBusy(true)
     addLog('task', '== 更新业务项目 ==')
     try {
-      const report = await api.updateProject(projectPath, allowDirty || (projectStatus?.dirty ?? false))
+      const report = await api.updateProject(selectedProject, allowDirty || (selectedProjectStatus?.dirty ?? false))
       addLogs(...reportToLogs(report))
       if (report.ok) {
         const diff = report.details?.diff_stat ?? report.details?.status ?? '无 git 变更摘要'
         addLog('info', `更新摘要：${diff}`)
-        setProjectStatus((prev) => prev ? { ...prev, status: 'ok' } : prev)
-      } else {
-        handleCheckProject(projectPath)
       }
+      await inspectProjectInner(selectedProject, true)
     } catch (err) {
       addLog('error', `失败：更新业务项目 - ${err}`)
     } finally {
       setProjectBusy(false)
     }
-  }, [projectPath, projectStatus, allowDirty, addLog, addLogs, handleCheckProject])
+  }, [selectedProject, selectedProjectStatus, allowDirty, addLog, addLogs, inspectProjectInner])
 
   const handleOpenDir = useCallback(async () => {
-    if (!projectPath) return
-    await api.openDirectory(projectPath)
-    addLog('info', `已请求打开目录：${projectPath}`)
-  }, [projectPath, addLog])
+    if (!selectedProject) return
+    await api.openDirectory(selectedProject)
+    addLog('info', `已请求打开目录：${selectedProject}`)
+  }, [selectedProject, addLog])
 
-  // ── Log actions ──
+  // ── 初始化 ──
+
+  const initialized = useRef(false)
+
+  useEffect(() => {
+    if (initialized.current) return
+    initialized.current = true
+
+    void (async () => {
+      try {
+        const [pi, cfg, logs] = await Promise.all([
+          api.getPlatformInfo(),
+          api.getConfig(),
+          api.getLogs(),
+        ])
+
+        setPlatformInfo(pi)
+        setRepoPath(cfg.trellis_repo)
+
+        const initialProjects = dedupeProjects(
+          cfg.projects.length > 0 ? cfg.projects : cfg.recent_projects,
+        )
+        const selected = cfg.last_selected_project && initialProjects.includes(cfg.last_selected_project)
+          ? cfg.last_selected_project
+          : initialProjects[0] ?? null
+        setProjects(initialProjects)
+        setSelectedProject(selected)
+
+        if (!pi.is_macos) {
+          addLog('info', '当前客户端第一版只支持 macOS。')
+        }
+
+        if (logs.length) {
+          addLog('info', '== 最近操作记录 ==')
+          addLogs(...logs.slice(0, 20).flatMap(operationLogToEntries))
+        }
+
+        // 启动后立即刷新工具链和已保存项目状态。
+        checkEnvironmentInner()
+        checkRepoInner(cfg.trellis_repo)
+        checkCommandsInner()
+        if (initialProjects.length > 0) {
+          inspectProjectsInner(initialProjects)
+        }
+      } catch (err) {
+        addLog('error', `初始化失败：${err}`)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── 日志操作 ──
 
   const handleCopyLogs = useCallback(() => {
     const text = logEntries
@@ -376,51 +491,34 @@ export default function App() {
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col gap-5 px-6 py-8 min-h-screen bg-background">
-        <Header platformInfo={platformInfo} readyStatus={readyStatus} />
+      <div className="flex flex-col gap-5 px-6 pt-6 pb-20 min-h-screen bg-background">
+        <Header
+          platformInfo={platformInfo}
+          readyStatus={readyStatus}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+        />
 
-        <SummaryCards state={summaryState} />
+        <SummaryCards state={summaryState} showProject={activeTab === 'projects'} />
 
-        <Tabs defaultValue="tools" className="flex flex-col gap-0">
-          <TabsList
-            variant="line"
-            className="w-full h-auto rounded-none border-b justify-start gap-0 pb-0"
-          >
-            <TabsTrigger
-              value="tools"
-              className="h-auto gap-2 rounded-none px-5 pb-3 pt-1 text-sm font-semibold"
-            >
-              <Wrench className="size-4 shrink-0" />
-              <span>工具链安装</span>
-              <span className="hidden text-xs font-normal text-muted-foreground sm:inline">
-                — 检查依赖、下载仓库、创建命令
-              </span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="project"
-              className="h-auto gap-2 rounded-none px-5 pb-3 pt-1 text-sm font-semibold"
-            >
-              <FolderGit2 className="size-4 shrink-0" />
-              <span>业务项目</span>
-              <span className="hidden text-xs font-normal text-muted-foreground sm:inline">
-                — 对项目执行 Init / Update
-              </span>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="tools" className="flex flex-col gap-4 mt-5">
-            <div className="flex gap-4">
-              <EnvironmentCard
-                items={envItems}
-                loading={envLoading}
-                onRefresh={checkEnvironmentInner}
-              />
-              <CommandCard
-                items={cmdItems}
-                loading={cmdLoading}
-                onRefresh={checkCommandsInner}
-              />
+        {activeTab === 'toolchain' ? (
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+            <div className="flex flex-col gap-1 px-1">
+              <h2 className="text-base font-bold tracking-tight text-foreground flex items-center gap-2 select-none">
+                <Wrench className="size-4 text-blue-500" />
+                <span>工具链基石</span>
+              </h2>
+              <p className="text-xs text-muted-foreground select-none">
+                搭建本机的 Trellis 工具链，创建全局命令。
+              </p>
             </div>
+
+            <EnvironmentCard
+              items={envItems}
+              loading={envLoading}
+              onRefresh={checkEnvironmentInner}
+            />
+
             <RepoCard
               repoPath={repoPath}
               status={repoStatus}
@@ -431,26 +529,51 @@ export default function App() {
               onCreateWrappers={handleCreateWrappers}
               onPathChange={setRepoPath}
             />
-          </TabsContent>
 
-          <TabsContent value="project" className="mt-5">
-            <ProjectCard
-              projectPath={projectPath}
-              status={projectStatus}
-              loading={projectLoading}
-              busy={projectBusy}
-              allowDirty={allowDirty}
-              recentProjects={recentProjects}
-              onBrowse={handleBrowse}
-              onCheck={() => handleCheckProject()}
-              onInit={handleInitProject}
-              onUpdate={handleUpdateProject}
-              onOpenDir={handleOpenDir}
-              onAllowDirtyChange={setAllowDirty}
-              onPathChange={setProjectPath}
+            <CommandCard
+              items={cmdItems}
+              loading={cmdLoading}
+              onRefresh={checkCommandsInner}
             />
-          </TabsContent>
-        </Tabs>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-[18rem_minmax(0,1fr)] gap-6 items-start my-1">
+            <ProjectList
+              projects={projects}
+              selectedProject={selectedProject}
+              statuses={projectStatuses}
+              busy={projectBusy}
+              onAdd={handleAddProject}
+              onSelect={handleSelectProject}
+              onRemove={handleRemoveProject}
+            />
+
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1 px-1">
+                <h2 className="text-base font-bold tracking-tight text-foreground flex items-center gap-2 select-none">
+                  <FolderGit2 className="size-4 text-emerald-500" />
+                  <span>业务项目中心</span>
+                </h2>
+                <p className="text-xs text-muted-foreground select-none">
+                  选择本地 Git 项目，一键执行 Trellis 的 Init 与 Update。
+                </p>
+              </div>
+
+              <ProjectCard
+                projectPath={selectedProject}
+                status={selectedProjectStatus}
+                loading={projectLoading}
+                busy={projectBusy}
+                allowDirty={allowDirty}
+                onCheck={() => handleCheckProject()}
+                onInit={handleInitProject}
+                onUpdate={handleUpdateProject}
+                onOpenDir={handleOpenDir}
+                onAllowDirtyChange={setAllowDirty}
+              />
+            </div>
+          </div>
+        )}
 
         <LogPanel
           entries={logEntries}

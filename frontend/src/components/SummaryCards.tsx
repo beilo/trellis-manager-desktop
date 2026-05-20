@@ -38,13 +38,15 @@ export interface SummaryState {
   projectStatus: Status
 }
 
-export function SummaryCards({ state }: { state: SummaryState }) {
+export function SummaryCards({ state, showProject }: { state: SummaryState; showProject: boolean }) {
   return (
     <div className="flex gap-3">
       <SummaryCard title="环境" value={state.envValue} status={state.envStatus} />
       <SummaryCard title="工具仓库" value={state.repoValue} status={state.repoStatus} />
       <SummaryCard title="命令入口" value={state.commandValue} status={state.commandStatus} />
-      <SummaryCard title="业务项目" value={state.projectValue} status={state.projectStatus} />
+      {showProject && (
+        <SummaryCard title="当前项目" value={state.projectValue} status={state.projectStatus} />
+      )}
     </div>
   )
 }

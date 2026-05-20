@@ -1,11 +1,38 @@
 import { cn } from '@/lib/utils'
 import type { Status } from '@/types'
 
-const STATUS_CONFIG: Record<Status, { bg: string; text: string; label: string }> = {
-  ok: { bg: 'bg-green-100 border-green-200', text: 'text-green-800', label: 'OK' },
-  warning: { bg: 'bg-yellow-100 border-yellow-200', text: 'text-yellow-800', label: '注意' },
-  error: { bg: 'bg-red-100 border-red-200', text: 'text-red-800', label: '错误' },
-  unknown: { bg: 'bg-muted border-border', text: 'text-muted-foreground', label: '等待' },
+const STATUS_CONFIG: Record<
+  Status,
+  { bg: string; border: string; text: string; dot: string; label: string }
+> = {
+  ok: {
+    bg: 'bg-emerald-500/8 dark:bg-emerald-500/10',
+    border: 'border-emerald-500/20 dark:border-emerald-500/30',
+    text: 'text-emerald-600 dark:text-emerald-400',
+    dot: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]',
+    label: '就绪',
+  },
+  warning: {
+    bg: 'bg-amber-500/8 dark:bg-amber-500/10',
+    border: 'border-amber-500/20 dark:border-amber-500/30',
+    text: 'text-amber-600 dark:text-amber-400',
+    dot: 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]',
+    label: '警告',
+  },
+  error: {
+    bg: 'bg-rose-500/8 dark:bg-rose-500/10',
+    border: 'border-rose-500/20 dark:border-rose-500/30',
+    text: 'text-rose-600 dark:text-rose-400',
+    dot: 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)] animate-pulse',
+    label: '异常',
+  },
+  unknown: {
+    bg: 'bg-slate-500/5 dark:bg-slate-500/8',
+    border: 'border-slate-500/15 dark:border-slate-500/20',
+    text: 'text-slate-500 dark:text-slate-400',
+    dot: 'bg-slate-400 dark:bg-slate-500',
+    label: '等待',
+  },
 }
 
 interface StatusBadgeProps {
@@ -21,14 +48,16 @@ export function StatusBadge({ status, label, className }: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center justify-center rounded-full border px-3 py-1 text-xs font-bold tabular-nums shrink-0',
-        'transition-all duration-300 ease-in-out',
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold tabular-nums shrink-0',
+        'transition-all duration-300 ease-in-out select-none',
         config.bg,
+        config.border,
         config.text,
         className,
       )}
     >
-      {text}
+      <span className={cn('size-1.5 rounded-full shrink-0', config.dot)} />
+      <span className="truncate max-w-24">{text}</span>
     </span>
   )
 }

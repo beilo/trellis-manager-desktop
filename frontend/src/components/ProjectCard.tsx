@@ -2,24 +2,21 @@ import { Loader2, FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { AppInput } from './AppInput'
 import { StatusBadge } from './StatusBadge'
+import { StepBadge, type StepStatus } from './StepBadge'
 import type { ProjectStatus } from '@/types'
 
 interface ProjectCardProps {
-  projectPath: string
+  projectPath: string | null
   status: ProjectStatus | null
   loading: boolean
   busy: boolean
   allowDirty: boolean
-  recentProjects: string[]
-  onBrowse: () => void
   onCheck: () => void
   onInit: () => void
   onUpdate: () => void
   onOpenDir: () => void
   onAllowDirtyChange: (v: boolean) => void
-  onPathChange: (path: string) => void
 }
 
 export function ProjectCard({
@@ -28,18 +25,24 @@ export function ProjectCard({
   loading,
   busy,
   allowDirty,
-  recentProjects,
-  onBrowse,
   onCheck,
   onInit,
   onUpdate,
   onOpenDir,
   onAllowDirtyChange,
-  onPathChange,
 }: ProjectCardProps) {
   const projectStatus = status?.status ?? 'unknown'
 
-  let detailText = '请先选择业务项目目录'
+  let stepStatus: StepStatus = 'idle'
+  if (busy || loading) {
+    stepStatus = 'loading'
+  } else if (projectPath && status) {
+    if (status.status === 'ok') stepStatus = 'ok'
+    else if (status.status === 'warning') stepStatus = 'warning'
+    else if (status.status === 'error') stepStatus = 'error'
+  }
+
+  let detailText = '请先在左侧添加或选择业务项目'
   let badgeLabel: string | undefined
   if (status?.path) {
     detailText = status.message
@@ -48,16 +51,14 @@ export function ProjectCard({
   else if (!projectPath) badgeLabel = '未选择'
 
   return (
-    <Card className="transition-all duration-200 hover:ring-foreground/15">
+    <Card className="premium-card">
       <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
         <div className="flex items-center gap-3">
-          <div className={`flex size-9 items-center justify-center rounded-full bg-blue-50 text-sm font-extrabold text-blue-600 shrink-0 transition-all duration-300 ${(loading || busy) ? 'animate-pulse ring-2 ring-blue-300/60' : ''}`}>
-            4
-          </div>
+          <StepBadge step={4} status={stepStatus} />
           <div className="flex flex-col gap-0.5">
-            <span className="text-base font-bold text-foreground">业务项目</span>
-            <span className="text-xs text-muted-foreground">
-              选择 git 项目后执行 Init 或 Update；不会自动提交。
+            <span className="text-base font-bold text-foreground select-none">业务项目操作</span>
+            <span className="text-xs text-muted-foreground select-none">
+              对当前选中项目执行检查、Init 或 Update。
             </span>
           </div>
         </div>
@@ -84,22 +85,13 @@ export function ProjectCard({
       <CardContent className="flex flex-col gap-4 pt-0">
         <div className="flex flex-col gap-1.5">
           <span className="text-xs text-muted-foreground font-medium">项目路径</span>
-          <div className="flex gap-2">
-            <AppInput
-              value={projectPath}
-              onChange={(e) => onPathChange(e.target.value)}
-              placeholder="请选择 git 项目目录…"
-              list="recent-projects"
-              className="flex-1"
-            />
-            <datalist id="recent-projects">
-              {recentProjects.map((p) => (
-                <option key={p} value={p} />
-              ))}
-            </datalist>
-            <Button variant="outline" size="sm" onClick={onBrowse} disabled={busy}>
-              选择目录…
-            </Button>
+          <div
+            className="min-h-10 rounded-lg border bg-muted/35 px-3 py-2 font-mono text-sm text-foreground"
+            title={projectPath ?? undefined}
+          >
+            <span className="block truncate">
+              {projectPath ?? '未选择项目'}
+            </span>
           </div>
         </div>
 

@@ -10,10 +10,14 @@ import webview
 
 from app.config import (
     ManagerConfig,
+    add_project as add_project_to_config,
     load_config,
     load_operation_logs,
     remember_project,
+    remove_project as remove_project_from_config,
     save_config,
+    save_projects as save_projects_to_config,
+    save_selected_project as save_selected_project_to_config,
 )
 from app.ops import (
     check_environment,
@@ -56,6 +60,12 @@ class TrellisAPI:
     def get_config(self) -> dict[str, Any]:
         return {
             "trellis_repo": str(self._config.trellis_repo),
+            "projects": [str(p) for p in self._config.projects],
+            "last_selected_project": (
+                str(self._config.last_selected_project)
+                if self._config.last_selected_project
+                else None
+            ),
             "recent_projects": [str(p) for p in self._config.recent_projects],
         }
 
@@ -63,12 +73,52 @@ class TrellisAPI:
         repo = Path(path).expanduser()
         self._config = ManagerConfig(
             trellis_repo=repo,
+            projects=self._config.projects,
+            last_selected_project=self._config.last_selected_project,
             recent_projects=self._config.recent_projects,
         )
         if self._config_file:
             save_config(self._config, self._config_file)
         else:
             save_config(self._config)
+
+    def get_projects(self) -> list[str]:
+        return [str(p) for p in self._config.projects]
+
+    def save_projects(self, projects: list[str], last_selected_project: str | None = None) -> None:
+        paths = [Path(path).expanduser() for path in projects]
+        selected = Path(last_selected_project).expanduser() if last_selected_project else None
+        self._config = (
+            save_projects_to_config(paths, self._config_file, selected)
+            if self._config_file
+            else save_projects_to_config(paths, last_selected_project=selected)
+        )
+
+    def add_project(self, path: str) -> dict[str, Any]:
+        status = inspect_project(path, self._runner)
+        if status.path is None:
+            return dataclass_to_dict(status)
+        self._config = (
+            add_project_to_config(status.path, self._config_file)
+            if self._config_file
+            else add_project_to_config(status.path)
+        )
+        return dataclass_to_dict(status)
+
+    def remove_project(self, path: str) -> None:
+        self._config = (
+            remove_project_from_config(Path(path).expanduser(), self._config_file)
+            if self._config_file
+            else remove_project_from_config(Path(path).expanduser())
+        )
+
+    def save_selected_project(self, path: str | None) -> None:
+        selected = Path(path).expanduser() if path else None
+        self._config = (
+            save_selected_project_to_config(selected, self._config_file)
+            if self._config_file
+            else save_selected_project_to_config(selected)
+        )
 
     def get_recent_projects(self) -> list[str]:
         return [str(p) for p in self._config.recent_projects]

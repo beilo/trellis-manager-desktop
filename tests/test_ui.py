@@ -26,7 +26,15 @@ class TrellisManagerUiTest(unittest.TestCase):
             config_path = Path(tmp) / "config.json"
             repo = Path(tmp) / "Trellis"
             project = Path(tmp) / "crm-web-b2c"
-            save_config(ManagerConfig(trellis_repo=repo, recent_projects=[project]), config_path)
+            save_config(
+                ManagerConfig(
+                    trellis_repo=repo,
+                    projects=[project],
+                    last_selected_project=project,
+                    recent_projects=[project],
+                ),
+                config_path,
+            )
 
             api = TrellisAPI(config_file=config_path)
 
@@ -34,9 +42,29 @@ class TrellisManagerUiTest(unittest.TestCase):
                 api.get_config(),
                 {
                     "trellis_repo": str(repo),
+                    "projects": [str(project)],
+                    "last_selected_project": str(project),
                     "recent_projects": [str(project)],
                 },
             )
+
+    def test_project_apis_persist_list_and_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "config.json"
+            repo = Path(tmp) / "Trellis"
+            first = Path(tmp) / "first"
+            second = Path(tmp) / "second"
+            save_config(ManagerConfig(trellis_repo=repo, projects=[first]), config_path)
+
+            api = TrellisAPI(config_file=config_path)
+
+            api.save_projects([str(first), str(second), str(first)], str(second))
+            self.assertEqual(api.get_projects(), [str(first), str(second)])
+            self.assertEqual(api.get_config()["last_selected_project"], str(second))
+
+            api.remove_project(str(second))
+            self.assertEqual(api.get_projects(), [str(first)])
+            self.assertEqual(api.get_config()["last_selected_project"], str(first))
 
     def test_select_directory_handles_missing_and_present_window(self) -> None:
         api = TrellisAPI()

@@ -66,7 +66,18 @@ export interface OperationReport {
 
 export interface ManagerConfig {
   trellis_repo: string
+  projects: string[]
+  last_selected_project: string | null
   recent_projects: string[]
+}
+
+export type ActiveTab = 'toolchain' | 'projects'
+
+export interface AppState {
+  activeTab: ActiveTab
+  projects: string[]
+  selectedProject: string | null
+  projectStatuses: Record<string, ProjectStatus>
 }
 
 export interface PlatformInfo {

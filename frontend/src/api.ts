@@ -20,6 +20,11 @@ declare global {
 interface PywebviewAPI {
   get_config(): Promise<ManagerConfig>
   save_repo_path(path: string): Promise<void>
+  get_projects(): Promise<string[]>
+  save_projects(projects: string[], last_selected_project?: string | null): Promise<void>
+  add_project(path: string): Promise<ProjectStatus>
+  remove_project(path: string): Promise<void>
+  save_selected_project(path: string | null): Promise<void>
   get_platform_info(): Promise<PlatformInfo>
   check_environment(): Promise<EnvironmentItem[]>
   check_tool_repo(path: string): Promise<RepoStatus>
@@ -74,6 +79,26 @@ export const api = {
 
   async saveRepoPath(path: string): Promise<void> {
     return (await getApi()).save_repo_path(path)
+  },
+
+  async getProjects(): Promise<string[]> {
+    return (await getApi()).get_projects()
+  },
+
+  async saveProjects(projects: string[], lastSelectedProject?: string | null): Promise<void> {
+    return (await getApi()).save_projects(projects, lastSelectedProject ?? null)
+  },
+
+  async addProject(path: string): Promise<ProjectStatus> {
+    return (await getApi()).add_project(path)
+  },
+
+  async removeProject(path: string): Promise<void> {
+    return (await getApi()).remove_project(path)
+  },
+
+  async saveSelectedProject(path: string | null): Promise<void> {
+    return (await getApi()).save_selected_project(path)
   },
 
   async getPlatformInfo(): Promise<PlatformInfo> {

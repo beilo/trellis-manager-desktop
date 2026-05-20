@@ -24,6 +24,8 @@ PATH_EXPORT_LINE = 'export PATH="$HOME/.beilo-trellis/bin:$PATH"'
 @dataclass(frozen=True)
 class ManagerConfig:
     trellis_repo: Path = DEFAULT_REPO_DIR
+    projects: list[Path] = field(default_factory=list)
+    last_selected_project: Path | None = None
     recent_projects: list[Path] = field(default_factory=list)
 
 
@@ -61,17 +63,48 @@ def load_config(config_file: Path = CONFIG_FILE) -> ManagerConfig:
         ]
     else:
         recent = []
+    projects_raw = data.get("projects") if isinstance(data, dict) else None
+    if isinstance(projects_raw, list):
+        projects = [
+            Path(item).expanduser()
+            for item in projects_raw
+            if isinstance(item, str) and item.strip()
+        ]
+    else:
+        # 旧配置只有最近项目列表，首次加载时直接迁移成项目列表。
+        projects = recent
+    last_selected_raw = data.get("last_selected_project") if isinstance(data, dict) else None
+    last_selected = (
+        Path(last_selected_raw).expanduser()
+        if isinstance(last_selected_raw, str) and last_selected_raw.strip()
+        else None
+    )
     repo = _path_from_json(
         data.get("trellis_repo") if isinstance(data, dict) else None,
         DEFAULT_REPO_DIR,
     )
-    return ManagerConfig(trellis_repo=repo, recent_projects=_dedupe_paths(recent))
+    deduped_projects = _dedupe_paths(projects)
+    project_keys = {str(path.expanduser()) for path in deduped_projects}
+    if last_selected and str(last_selected.expanduser()) not in project_keys:
+        last_selected = deduped_projects[0] if deduped_projects else None
+    return ManagerConfig(
+        trellis_repo=repo,
+        projects=deduped_projects,
+        last_selected_project=last_selected,
+        recent_projects=_dedupe_paths(recent),
+    )
 
 
 def save_config(config: ManagerConfig, config_file: Path = CONFIG_FILE) -> None:
     config_file.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "trellis_repo": str(config.trellis_repo.expanduser()),
+        "projects": [str(path.expanduser()) for path in _dedupe_paths(config.projects)],
+        "last_selected_project": (
+            str(config.last_selected_project.expanduser())
+            if config.last_selected_project
+            else None
+        ),
         "recent_projects": [str(path.expanduser()) for path in _dedupe_paths(config.recent_projects)],
     }
     config_file.write_text(
@@ -85,7 +118,76 @@ def remember_project(project_dir: Path, config_file: Path = CONFIG_FILE) -> Mana
     # 这里把最近项目去重后前置，避免 UI 下拉里出现重复路径。
     updated = ManagerConfig(
         trellis_repo=config.trellis_repo,
+        projects=config.projects,
+        last_selected_project=config.last_selected_project,
         recent_projects=_dedupe_paths([project_dir.expanduser(), *config.recent_projects])[:20],
+    )
+    save_config(updated, config_file)
+    return updated
+
+
+def save_projects(
+    projects: list[Path],
+    config_file: Path = CONFIG_FILE,
+    last_selected_project: Path | None = None,
+) -> ManagerConfig:
+    config = load_config(config_file)
+    deduped_projects = _dedupe_paths([path.expanduser() for path in projects])
+    selected = last_selected_project.expanduser() if last_selected_project else config.last_selected_project
+    project_keys = {str(path.expanduser()) for path in deduped_projects}
+    if selected and str(selected.expanduser()) not in project_keys:
+        selected = deduped_projects[0] if deduped_projects else None
+    updated = ManagerConfig(
+        trellis_repo=config.trellis_repo,
+        projects=deduped_projects,
+        last_selected_project=selected,
+        recent_projects=config.recent_projects,
+    )
+    save_config(updated, config_file)
+    return updated
+
+
+def add_project(project_dir: Path, config_file: Path = CONFIG_FILE) -> ManagerConfig:
+    config = load_config(config_file)
+    project = project_dir.expanduser()
+    updated = ManagerConfig(
+        trellis_repo=config.trellis_repo,
+        projects=_dedupe_paths([*config.projects, project]),
+        last_selected_project=project,
+        recent_projects=_dedupe_paths([project, *config.recent_projects])[:20],
+    )
+    save_config(updated, config_file)
+    return updated
+
+
+def remove_project(project_dir: Path, config_file: Path = CONFIG_FILE) -> ManagerConfig:
+    config = load_config(config_file)
+    target = str(project_dir.expanduser())
+    projects = [path for path in config.projects if str(path.expanduser()) != target]
+    selected = config.last_selected_project
+    if selected and str(selected.expanduser()) == target:
+        selected = projects[0] if projects else None
+    updated = ManagerConfig(
+        trellis_repo=config.trellis_repo,
+        projects=projects,
+        last_selected_project=selected,
+        recent_projects=config.recent_projects,
+    )
+    save_config(updated, config_file)
+    return updated
+
+
+def save_selected_project(project_dir: Path | None, config_file: Path = CONFIG_FILE) -> ManagerConfig:
+    config = load_config(config_file)
+    selected = project_dir.expanduser() if project_dir else None
+    project_keys = {str(path.expanduser()) for path in config.projects}
+    if selected and str(selected.expanduser()) not in project_keys:
+        selected = config.projects[0] if config.projects else None
+    updated = ManagerConfig(
+        trellis_repo=config.trellis_repo,
+        projects=config.projects,
+        last_selected_project=selected,
+        recent_projects=config.recent_projects,
     )
     save_config(updated, config_file)
     return updated

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trellis Manager - 多项目管理草稿</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            border: '#e5e7eb',
+            background: '#ffffff',
+            foreground: '#111827',
+            muted: {
+              foreground: '#6b7280'
+            },
+            primary: {
+              DEFAULT: '#3b82f6',
+              foreground: '#ffffff'
+            },
+            card: '#f9fafb',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    .premium-card {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 0.75rem;
+      padding: 1rem;
+    }
+    .tab-active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
+    .tab-inactive { border-bottom: 2px solid transparent; color: #6b7280; }
+    .tab-inactive:hover { color: #111827; }
+    .project-item { transition: background 0.15s; }
+    .project-item:hover { background: #f3f4f6; }
+    .project-item.selected { background: #eff6ff; border-left: 3px solid #3b82f6; }
+  </style>
+</head>
+<body class="bg-white min-h-screen font-sans">
+  <div id="app" class="max-w-7xl mx-auto p-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-xl font-bold text-gray-900">Trellis Manager</h1>
+        <p class="text-sm text-gray-500">macOS 专用 · v0.5</p>
+      </div>
+      <div class="flex items-center gap-6">
+        <span id="platform" class="text-sm text-gray-500">macOS 14 · Python 3.12</span>
+        <div class="flex gap-1">
+          <button id="tab-toolchain" class="px-4 py-2 text-sm font-medium tab-active" onclick="switchTab('toolchain')">工具链</button>
+          <button id="tab-projects" class="px-4 py-2 text-sm font-medium tab-inactive" onclick="switchTab('projects')">项目</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="premium-card">
+        <div class="text-xs text-gray-500 mb-1">环境检查</div>
+        <div class="flex items-center gap-2">
+          <span id="env-status" class="w-2 h-2 rounded-full bg-green-500"></span>
+          <span id="env-value" class="text-sm font-medium">4/4 可用</span>
+        </div>
+      </div>
+      <div class="premium-card">
+        <div class="text-xs text-gray-500 mb-1">工具仓库</div>
+        <div class="flex items-center gap-2">
+          <span id="repo-status" class="w-2 h-2 rounded-full bg-green-500"></span>
+          <span id="repo-value" class="text-sm font-medium">v0.5.0</span>
+        </div>
+      </div>
+      <div class="premium-card">
+        <div class="text-xs text-gray-500 mb-1">命令入口</div>
+        <div class="flex items-center gap-2">
+          <span id="cmd-status" class="w-2 h-2 rounded-full bg-green-500"></span>
+          <span id="cmd-value" class="text-sm font-medium">3/3 可用</span>
+        </div>
+      </div>
+      <div class="premium-card">
+        <div class="text-xs text-gray-500 mb-1">当前项目</div>
+        <div class="flex items-center gap-2">
+          <span id="project-status" class="w-2 h-2 rounded-full bg-yellow-500"></span>
+          <span id="project-value" class="text-sm font-medium">project-b</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Area -->
+    <div id="content">
+      <!-- Toolchain Tab -->
+      <div id="toolchain-content">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Environment Card -->
+          <div class="premium-card">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">1</span>
+                <span class="font-bold">环境检查</span>
+              </div>
+              <button class="text-xs text-blue-600 hover:underline" onclick="refreshEnv()">刷新</button>
+            </div>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between"><span>Python</span><span class="text-green-600">3.12 ✓</span></div>
+              <div class="flex justify-between"><span>Git</span><span class="text-green-600">2.45 ✓</span></div>
+              <div class="flex justify-between"><span>Node</span><span class="text-green-600">20.14 ✓</span></div>
+              <div class="flex justify-between"><span>Docker</span><span class="text-green-600">26.0 ✓</span></div>
+            </div>
+          </div>
+
+          <!-- Repo Card -->
+          <div class="premium-card">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">2</span>
+                <span class="font-bold">工具仓库</span>
+              </div>
+            </div>
+            <div class="space-y-3">
+              <div class="flex items-center gap-2">
+                <input type="text" value="/Users/am/.trellis" class="flex-1 text-sm border rounded px-2 py-1 bg-white">
+                <button class="text-xs border px-2 py-1 rounded hover:bg-gray-50">浏览</button>
+              </div>
+              <div class="text-xs text-gray-500">~/github.com/beilo/trellis</div>
+              <div class="flex gap-2">
+                <button class="flex-1 text-xs border py-1.5 rounded hover:bg-gray-50">检查</button>
+                <button class="flex-1 text-xs bg-blue-600 text-white py-1.5 rounded hover:bg-blue-700">安装/更新</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Command Card -->
+          <div class="premium-card">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">3</span>
+                <span class="font-bold">命令入口</span>
+              </div>
+              <button class="text-xs text-blue-600 hover:underline" onclick="refreshCmds()">刷新</button>
+            </div>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between"><span>tl</span><span class="text-green-600">可用</span></div>
+              <div class="flex justify-between"><span>trellis</span><span class="text-green-600">可用</span></div>
+              <div class="flex justify-between"><span>codex</span><span class="text-green-600">可用</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Projects Tab -->
+      <div id="projects-content" class="hidden">
+        <div class="flex gap-6">
+          <!-- Sidebar -->
+          <div class="w-64 shrink-0">
+            <div class="premium-card">
+              <div class="flex items-center justify-between mb-3">
+                <span class="font-bold text-sm">项目列表</span>
+                <span class="text-xs text-gray-500">3 个项目</span>
+              </div>
+              <div id="project-list" class="space-y-1 max-h-80 overflow-y-auto">
+                <!-- Projects will be rendered here -->
+              </div>
+              <button class="w-full mt-3 text-xs border border-dashed py-2 rounded text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors" onclick="addProject()">
+                + 添加项目
+              </button>
+            </div>
+          </div>
+
+          <!-- Project Detail -->
+          <div class="flex-1">
+            <div id="project-detail-empty" class="premium-card h-64 flex items-center justify-center text-gray-400">
+              请从左侧选择一个项目
+            </div>
+            <div id="project-detail" class="hidden">
+              <div class="premium-card">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-3">
+                    <span class="w-8 h-8 rounded bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold">4</span>
+                    <div>
+                      <div id="detail-name" class="font-bold">project-a</div>
+                      <div id="detail-path" class="text-xs text-gray-500">/Users/am/projects/project-a</div>
+                    </div>
+                  </div>
+                  <div class="flex gap-2">
+                    <button class="px-3 py-1.5 text-xs border rounded hover:bg-gray-50">检查项目</button>
+                    <button class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">Init</button>
+                    <button class="px-3 py-1.5 text-xs border border-blue-600 text-blue-600 rounded hover:bg-blue-50">Update</button>
+                    <button class="px-3 py-1.5 text-xs border rounded hover:bg-gray-50">打开目录</button>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-4 mb-4">
+                  <div id="detail-status" class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                    <span class="text-sm">已安装</span>
+                  </div>
+                  <div class="text-sm text-gray-600 flex-1 truncate">
+                    Git: main · dirty: 否 · 3 个 commit 领先
+                  </div>
+                </div>
+
+                <div class="border-t pt-4">
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" class="rounded">
+                    <span class="text-sm text-gray-600">dirty 时确认后继续 update</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Recent Projects -->
+              <div class="premium-card mt-4">
+                <div class="font-bold text-sm mb-3">最近操作</div>
+                <div class="text-sm text-gray-500">
+                  <div class="py-1">15:32 · Init project-b · 成功</div>
+                  <div class="py-1">15:28 · Update project-a · 成功</div>
+                  <div class="py-1">14:10 · Init project-c · 失败</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log Panel -->
+    <div class="mt-6 premium-card">
+      <div class="flex items-center justify-between mb-2">
+        <span class="font-bold text-sm">操作日志</span>
+        <div class="flex gap-2">
+          <button class="text-xs text-gray-500 hover:text-gray-700" onclick="copyLogs()">复制</button>
+          <button class="text-xs text-gray-500 hover:text-gray-700" onclick="clearLogs()">清空</button>
+        </div>
+      </div>
+      <div id="log-content" class="bg-gray-900 text-gray-100 rounded p-4 text-xs font-mono h-32 overflow-y-auto">
+        <div class="text-gray-400">[15:32:01] [任务] == 检查业务项目 ==</div>
+        <div class="text-green-400">[15:32:02] [成功] 完成：检查业务项目 - ok</div>
+        <div class="text-gray-400">[15:32:05] [任务] == 更新业务项目 ==</div>
+        <div class="text-green-400">[15:32:08] [成功] 完成：更新业务项目 - ok</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 假数据
+    const projects = [
+      { id: 1, name: 'project-a', path: '/Users/am/projects/project-a', status: 'ok', message: '已安装' },
+      { id: 2, name: 'project-b', path: '/Users/am/projects/project-b', status: 'warning', message: 'dirty: 2 个文件' },
+      { id: 3, name: 'project-c', path: '/Users/am/projects/project-c', status: 'error', message: '未安装 Trellis' },
+    ];
+
+    let selectedProjectId = null;
+
+    function renderProjectList() {
+      const list = document.getElementById('project-list');
+      list.innerHTML = projects.map(p => `
+        <div class="project-item p-2 rounded cursor-pointer ${p.id === selectedProjectId ? 'selected' : ''}"
+             onclick="selectProject(${p.id})">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium">${p.name}</span>
+            <span class="w-2 h-2 rounded-full ${p.status === 'ok' ? 'bg-green-500' : p.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'}"></span>
+          </div>
+          <div class="text-xs text-gray-400 truncate mt-0.5">${p.path}</div>
+        </div>
+      `).join('');
+    }
+
+    function selectProject(id) {
+      selectedProjectId = id;
+      renderProjectList();
+
+      const project = projects.find(p => p.id === id);
+      if (project) {
+        document.getElementById('project-detail-empty').classList.add('hidden');
+        document.getElementById('project-detail').classList.remove('hidden');
+
+        document.getElementById('detail-name').textContent = project.name;
+        document.getElementById('detail-path').textContent = project.path;
+
+        const statusEl = document.getElementById('detail-status');
+        statusEl.innerHTML = `
+          <span class="w-2 h-2 rounded-full ${project.status === 'ok' ? 'bg-green-500' : project.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'}"></span>
+          <span class="text-sm">${project.message}</span>
+        `;
+
+        // 更新 Summary Cards
+        document.getElementById('project-value').textContent = project.name;
+        document.getElementById('project-status').className = `w-2 h-2 rounded-full ${project.status === 'ok' ? 'bg-green-500' : project.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'}`;
+      }
+    }
+
+    function addProject() {
+      const name = prompt('输入项目名称:');
+      if (name) {
+        const newId = projects.length + 1;
+        projects.push({
+          id: newId,
+          name: name,
+          path: `/Users/am/projects/${name}`,
+          status: 'error',
+          message: '待检查'
+        });
+        renderProjectList();
+        selectProject(newId);
+      }
+    }
+
+    function switchTab(tab) {
+      document.getElementById('tab-toolchain').className = `px-4 py-2 text-sm font-medium ${tab === 'toolchain' ? 'tab-active' : 'tab-inactive'}`;
+      document.getElementById('tab-projects').className = `px-4 py-2 text-sm font-medium ${tab === 'projects' ? 'tab-active' : 'tab-inactive'}`;
+
+      document.getElementById('toolchain-content').classList.toggle('hidden', tab !== 'toolchain');
+      document.getElementById('projects-content').classList.toggle('hidden', tab !== 'projects');
+    }
+
+    function refreshEnv() {
+      const el = document.getElementById('env-value');
+      el.textContent = '检查中...';
+      setTimeout(() => { el.textContent = '4/4 可用'; }, 800);
+    }
+
+    function refreshCmds() {
+      const el = document.getElementById('cmd-value');
+      el.textContent = '检查中...';
+      setTimeout(() => { el.textContent = '3/3 可用'; }, 800);
+    }
+
+    function copyLogs() {
+      const logs = document.getElementById('log-content').innerText;
+      navigator.clipboard.writeText(logs);
+      alert('日志已复制');
+    }
+
+    function clearLogs() {
+      document.getElementById('log-content').innerHTML = '<div class="text-gray-500">日志已清空</div>';
+    }
+
+    // 初始化
+    renderProjectList();
+    selectProject(1); // 默认选中第一个
+  </script>
+</body>
+</html>
