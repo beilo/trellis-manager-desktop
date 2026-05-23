@@ -7,6 +7,7 @@ import type {
   ProjectStatus,
   RepoStatus,
   ToolCommandStatus,
+  TrellisTaskSnapshot,
 } from './types'
 
 declare global {
@@ -27,6 +28,7 @@ interface PywebviewAPI {
   save_selected_project(path: string | null): Promise<void>
   get_platform_info(): Promise<PlatformInfo>
   check_environment(): Promise<EnvironmentItem[]>
+  check_helm_status(): Promise<EnvironmentItem>
   check_tool_repo(path: string): Promise<RepoStatus>
   check_wrapper_commands(): Promise<ToolCommandStatus[]>
   install_or_update_tool_repo(path: string): Promise<OperationReport>
@@ -39,6 +41,10 @@ interface PywebviewAPI {
   get_logs(): Promise<OperationLogEntry[]>
   select_directory(): Promise<string | null>
   open_directory(path: string): Promise<void>
+  open_in_iterm(path: string): Promise<void>
+  list_project_tasks(path: string, include_archive: boolean): Promise<TrellisTaskSnapshot>
+  open_task_directory(task_path: string): Promise<void>
+  push_task_to_helm(project_path: string, task_path: string): Promise<OperationReport>
 }
 
 function isPywebviewApiReady(candidate: PywebviewAPI | undefined): candidate is PywebviewAPI {
@@ -109,6 +115,10 @@ export const api = {
     return (await getApi()).check_environment()
   },
 
+  async checkHelmStatus(): Promise<EnvironmentItem> {
+    return (await getApi()).check_helm_status()
+  },
+
   async checkToolRepo(path: string): Promise<RepoStatus> {
     return (await getApi()).check_tool_repo(path)
   },
@@ -155,5 +165,24 @@ export const api = {
 
   async openDirectory(path: string): Promise<void> {
     return (await getApi()).open_directory(path)
+  },
+
+  async openInIterm(path: string): Promise<void> {
+    return (await getApi()).open_in_iterm(path)
+  },
+
+  async listProjectTasks(
+    path: string,
+    includeArchive: boolean = false
+  ): Promise<TrellisTaskSnapshot> {
+    return (await getApi()).list_project_tasks(path, includeArchive)
+  },
+
+  async openTaskDirectory(taskPath: string): Promise<void> {
+    return (await getApi()).open_task_directory(taskPath)
+  },
+
+  async pushTaskToHelm(projectPath: string, taskPath: string): Promise<OperationReport> {
+    return (await getApi()).push_task_to_helm(projectPath, taskPath)
   },
 }

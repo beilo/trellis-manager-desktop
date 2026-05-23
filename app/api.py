@@ -20,6 +20,7 @@ from app.config import (
     save_selected_project as save_selected_project_to_config,
 )
 from app.ops import (
+    check_helm_status,
     check_environment,
     check_tool_repo,
     check_wrapper_commands,
@@ -29,8 +30,10 @@ from app.ops import (
     inspect_project,
     install_or_update_tool_repo,
     is_supported_macos,
+    push_task_to_helm,
     update_project,
 )
+from app.task_snapshot import read_task_snapshot
 from app.runner import CommandRunner
 
 if TYPE_CHECKING:
@@ -95,7 +98,7 @@ class TrellisAPI:
         )
 
     def add_project(self, path: str) -> dict[str, Any]:
-        status = inspect_project(path, self._runner)
+        status = inspect_project(path, self._runner, self._config.trellis_repo)
         if status.path is None:
             return dataclass_to_dict(status)
         self._config = (
@@ -159,6 +162,11 @@ class TrellisAPI:
             result.append(d)
         return result
 
+    def check_helm_status(self) -> dict[str, Any]:
+        """返回 Helm CLI 可用性，供任务详情按钮决定禁用原因。"""
+        status = check_helm_status(self._runner)
+        return dataclass_to_dict(status)
+
     # ── 安装/构建操作 ──
 
     def install_or_update_tool_repo(self, path: str) -> dict[str, Any]:
@@ -172,7 +180,7 @@ class TrellisAPI:
     # ── 业务项目操作 ──
 
     def inspect_project(self, path: str) -> dict[str, Any]:
-        status = inspect_project(path, self._runner)
+        status = inspect_project(path, self._runner, self._config.trellis_repo)
         return dataclass_to_dict(status)
 
     def init_project(self, path: str) -> dict[str, Any]:
@@ -208,3 +216,30 @@ class TrellisAPI:
     def open_directory(self, path: str) -> None:
         expanded = str(Path(path).expanduser())
         subprocess.Popen(["open", expanded])  # noqa: S603,S607 - macOS only, safe path
+
+    def open_in_iterm(self, project_path: str) -> None:
+        """在 iTerm2 中打开业务项目根目录。"""
+        expanded = str(Path(project_path).expanduser())
+        subprocess.Popen(["open", "-a", "iTerm", expanded])  # noqa: S603,S607 - macOS only, safe path
+
+    # ── 任务管理 ──
+
+    def list_project_tasks(self, path: str, include_archive: bool = False) -> dict[str, Any]:
+        """读取业务项目的 Trellis 任务快照。"""
+        snapshot = read_task_snapshot(path, include_archive)
+        # 统一复用桥接层已有序列化逻辑，避免 API 层漏导入 dataclasses.asdict。
+        return dataclass_to_dict(snapshot)
+
+    def open_task_directory(self, task_path: str) -> None:
+        """打开指定任务目录（Finder）。"""
+        expanded = str(Path(task_path).expanduser())
+        subprocess.Popen(["open", expanded])  # noqa: S603,S607
+
+    def push_task_to_helm(self, project_path: str, task_path: str) -> dict[str, Any]:
+        """将指定 Trellis 任务推送为 Helm issue。"""
+        report = push_task_to_helm(
+            Path(project_path).expanduser(),
+            Path(task_path).expanduser(),
+            self._runner,
+        )
+        return report.to_log_entry()

@@ -1,4 +1,53 @@
-export type Status = 'ok' | 'warning' | 'error' | 'unknown'
+export type Status = 'ok' | 'warning' | 'error' | 'unknown' | 'info'
+
+export type TrellisTaskStatus =
+  | 'planning'
+  | 'in_progress'
+  | 'completed'
+  | 'done'
+  | 'unknown'
+
+export interface TrellisTaskItem {
+  dir_name: string
+  path: string
+  title: string
+  status: TrellisTaskStatus
+  raw_status: string
+  assignee: string | null
+  priority: string | null
+  created_at: string | null
+  completed_at: string | null
+  parent: string | null
+  children: string[]
+  child_done: number
+  child_total: number
+  branch: string | null
+  base_branch: string | null
+  has_prd: boolean
+  has_design: boolean
+  has_implement: boolean
+  archived: boolean
+  archive_month: string | null
+  error: string | null
+}
+
+/** 归档任务按月份分组 */
+export interface ArchiveMonthGroup {
+  month: string
+  tasks: TrellisTaskItem[]
+  error_count: number
+}
+
+export interface TrellisTaskSnapshot {
+  project_path: string
+  has_trellis: boolean
+  tasks_dir: string | null
+  tasks: TrellisTaskItem[]
+  counts: Record<string, number>
+  errors: string[]
+  archived_groups: ArchiveMonthGroup[]
+  archive_counts: Record<string, number>
+}
 
 export interface EnvironmentItem {
   name: string
@@ -31,6 +80,9 @@ export interface ProjectStatus {
   dirty: boolean
   status: Status
   message: string
+  trellis_version: string | null
+  latest_version: string | null
+  version_outdated: boolean
 }
 
 export interface CommandResult {

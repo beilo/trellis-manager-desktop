@@ -9,6 +9,7 @@ import { CommandCard } from './components/CommandCard'
 import { ProjectCard } from './components/ProjectCard'
 import { ProjectList } from './components/ProjectList'
 import { LogPanel } from './components/LogPanel'
+import { TaskManagerPanel } from './components/TaskManagerPanel'
 import { api } from './api'
 import type {
   ActiveTab,
@@ -572,6 +573,11 @@ export default function App() {
                 onUpdate={handleUpdateProject}
                 onOpenDir={handleOpenDir}
                 onAllowDirtyChange={setAllowDirty}
+              />
+
+              <TaskManagerPanel
+                projectPath={selectedProject}
+                projectStatus={selectedProjectStatus}
               />
             </div>
           </div>

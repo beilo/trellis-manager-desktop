@@ -18,8 +18,9 @@ from app.config import (
     PATH_EXPORT_LINE,
 )
 from app.runner import CommandResult, CommandRunner
+from app.task_snapshot import read_task_snapshot, TrellisTaskItem, TrellisTaskSnapshot
 
-Status = Literal["ok", "warning", "error", "unknown"]
+Status = Literal["ok", "warning", "error", "unknown", "info"]
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,9 @@ class ProjectStatus:
     dirty: bool
     status: Status
     message: str
+    trellis_version: str | None = None
+    latest_version: str | None = None
+    version_outdated: bool = False
 
 
 @dataclass(frozen=True)
@@ -126,9 +130,36 @@ def project_update_command(bin_dir: Path = DEFAULT_BIN_DIR) -> list[str]:
     return [str(wrapper_path("tl", bin_dir)), "update", "--force"]
 
 
+def helm_workspace_new_command(workspace_name: str, project_dir: Path) -> list[str]:
+    return ["helm", "workspace", "new", workspace_name, "--project", str(project_dir)]
+
+
+def helm_issue_new_command(
+    workspace_name: str,
+    title: str,
+    prd_file: Path,
+    project_name: str,
+) -> list[str]:
+    return [
+        "helm",
+        "issue",
+        "new",
+        workspace_name,
+        title,
+        "--description-file",
+        str(prd_file),
+        "--project",
+        project_name,
+        "--status",
+        "todo",
+        "--json",
+    ]
+
+
 def install_instruction(name: str) -> str:
     instructions = {
         "git": "请先安装 Xcode Command Line Tools 或 Homebrew git。",
+        "helm": "请先安装 Helm CLI。",
         "node": "请安装 Node.js 18.17+，建议使用 nvm 或 Homebrew。",
         "pnpm": "请安装 pnpm，例如执行 npm install -g pnpm。",
     }
@@ -163,6 +194,27 @@ def check_environment(runner: CommandRunner | None = None) -> list[EnvironmentIt
     return items
 
 
+def check_helm_status(runner: CommandRunner | None = None) -> EnvironmentItem:
+    """检查 Helm CLI 是否可执行，供前端决定按钮禁用态。"""
+    runner = runner or CommandRunner()
+    result = runner.run(["helm", "--version"], timeout=10)
+    output = (result.stdout or result.stderr).strip().splitlines()
+    if result.ok:
+        return EnvironmentItem(
+            name="helm",
+            ok=True,
+            status="ok",
+            version=output[0] if output else None,
+            message="Helm 已安装。",
+        )
+    return EnvironmentItem(
+        name="helm",
+        ok=False,
+        status="error",
+        message="未安装 Helm",
+    )
+
+
 def is_git_repo(path: Path, runner: CommandRunner | None = None) -> bool:
     runner = runner or CommandRunner()
     if not path.exists() or not path.is_dir():
@@ -188,6 +240,48 @@ def read_cli_version(repo_dir: Path) -> str | None:
         return None
     version = data.get("version") if isinstance(data, dict) else None
     return version if isinstance(version, str) else None
+
+
+def read_project_trellis_version(project_dir: Path) -> str | None:
+    version_file = project_dir / ".trellis" / ".version"
+    if not version_file.exists():
+        return None
+    try:
+        version = version_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return version or None
+
+
+def is_version_outdated(installed: str | None, latest: str | None) -> bool:
+    if latest is None:
+        return False
+    if installed is None:
+        return True
+    if installed == latest:
+        return False
+    installed_key = _semver_key(installed)
+    latest_key = _semver_key(latest)
+    if installed_key is None or latest_key is None:
+        return installed != latest
+    return installed_key < latest_key
+
+
+def _semver_key(version: str) -> tuple[tuple[int, int, int], tuple[object, ...]] | None:
+    release, separator, prerelease = version.partition("-")
+    parts = release.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        release_key = tuple(int(part) for part in parts)
+    except ValueError:
+        return None
+    if separator == "":
+        return release_key, (1,)
+    prerelease_key: list[object] = [0]
+    for token in prerelease.split("."):
+        prerelease_key.append((1, int(token)) if token.isdigit() else (0, token))
+    return release_key, tuple(prerelease_key)
 
 
 def is_trellis_repo(repo_dir: Path) -> bool:
@@ -412,7 +506,11 @@ def check_wrapper_commands(
     return statuses
 
 
-def inspect_project(path_text: str, runner: CommandRunner | None = None) -> ProjectStatus:
+def inspect_project(
+    path_text: str,
+    runner: CommandRunner | None = None,
+    tool_repo_dir: Path = DEFAULT_REPO_DIR,
+) -> ProjectStatus:
     runner = runner or CommandRunner()
     if not path_text.strip():
         return ProjectStatus(None, False, False, False, False, "unknown", "请先选择业务项目目录。")
@@ -424,16 +522,36 @@ def inspect_project(path_text: str, runner: CommandRunner | None = None) -> Proj
     if git_ok:
         dirty, _, _ = git_status_short(path, runner)
     has_trellis = (path / ".trellis").exists()
+    trellis_version = read_project_trellis_version(path) if has_trellis else None
+    latest_version = read_cli_version(tool_repo_dir.expanduser()) if has_trellis else None
+    version_outdated = has_trellis and is_version_outdated(trellis_version, latest_version)
     if not git_ok:
         status: Status = "error"
         message = "目标项目不是 git 仓库，不能 init 或 update。"
     elif has_trellis:
-        status = "warning" if dirty else "ok"
-        message = "项目已安装 Trellis，可执行 update。"
+        status = "warning" if version_outdated else "ok"
+        if version_outdated:
+            current = trellis_version or "未知"
+            message = f"项目 Trellis 版本 {current}，最新版本 {latest_version}，建议 update。"
+        elif trellis_version:
+            message = f"项目已安装 Trellis（{trellis_version}），可执行 update。"
+        else:
+            message = "项目已安装 Trellis，可执行 update。"
     else:
-        status = "warning" if dirty else "ok"
+        status = "ok"
         message = "项目可执行 Trellis init。"
-    return ProjectStatus(path, True, git_ok, has_trellis, dirty, status, message)
+    return ProjectStatus(
+        path,
+        True,
+        git_ok,
+        has_trellis,
+        dirty,
+        status,
+        message,
+        trellis_version,
+        latest_version,
+        version_outdated,
+    )
 
 
 def init_project(
@@ -499,6 +617,155 @@ def update_project(
             "diff_stat": diff_result.stdout.strip(),
         },
     )
+
+
+def push_task_to_helm(
+    project_dir: Path,
+    task_dir: Path,
+    runner: CommandRunner | None = None,
+) -> OperationReport:
+    """将 Trellis 任务 PRD 推送为 Helm issue。"""
+    runner = runner or CommandRunner()
+    project_dir = expand_path(project_dir)
+    task_dir = expand_path(task_dir)
+    prd_file = task_dir / "prd.md"
+    if not prd_file.is_file():
+        raise OperationError("需要 PRD 文档。")
+
+    commands: list[CommandResult] = []
+    helm_status = runner.run(["helm", "--version"], timeout=10)
+    commands.append(helm_status)
+    _raise_if_failed(helm_status, "未安装 Helm。", commands)
+
+    workspace_name = _find_or_create_helm_workspace(project_dir, runner, commands)
+    title = _read_task_title(task_dir)
+    issue_result = runner.run(
+        helm_issue_new_command(workspace_name, title, prd_file, project_dir.name),
+        cwd=project_dir,
+        timeout=60,
+    )
+    commands.append(issue_result)
+    _raise_if_failed(issue_result, "推送 Helm issue 失败。", commands)
+
+    issue_id = _extract_helm_issue_id(issue_result.stdout)
+    message = f"已推送到 Helm issue {issue_id}。" if issue_id else "已推送到 Helm issue。"
+    details = {
+        "workspace": workspace_name,
+        "project": str(project_dir),
+        "task": str(task_dir),
+        "prd": str(prd_file),
+    }
+    if issue_id:
+        details["issue_id"] = issue_id
+    return OperationReport(
+        title="推送任务到 Helm",
+        ok=True,
+        message=message,
+        commands=commands,
+        details=details,
+    )
+
+
+def _find_or_create_helm_workspace(
+    project_dir: Path,
+    runner: CommandRunner,
+    commands: list[CommandResult],
+) -> str:
+    list_result = runner.run(["helm", "workspace", "ls", "--json"], timeout=30)
+    commands.append(list_result)
+    if not list_result.ok:
+        # Helm daemon 未运行时先尝试启动，再重试 workspace 列表。
+        daemon_result = runner.run(["helm", "daemon", "start"], timeout=30)
+        commands.append(daemon_result)
+        _raise_if_failed(daemon_result, "Helm daemon 启动失败。", commands)
+        list_result = runner.run(["helm", "workspace", "ls", "--json"], timeout=30)
+        commands.append(list_result)
+        _raise_if_failed(list_result, "读取 Helm workspace 失败。", commands)
+
+    workspace = _find_matching_workspace(list_result.stdout, project_dir, commands)
+    if workspace:
+        return workspace
+
+    create_result = runner.run(helm_workspace_new_command(project_dir.name, project_dir), timeout=60)
+    commands.append(create_result)
+    _raise_if_failed(create_result, "创建 Helm workspace 失败。", commands)
+    return project_dir.name
+
+
+def _find_matching_workspace(
+    workspaces_json: str,
+    project_dir: Path,
+    commands: list[CommandResult],
+) -> str | None:
+    try:
+        payload = json.loads(workspaces_json or "[]")
+    except json.JSONDecodeError as error:
+        raise OperationError(f"读取 Helm workspace 失败：JSON 格式无效。{error}", commands) from error
+    workspaces = _workspace_items(payload)
+    for workspace in workspaces:
+        if not isinstance(workspace, dict):
+            continue
+        name = workspace.get("name")
+        projects = workspace.get("projects")
+        if isinstance(name, str) and _workspace_projects_include(projects, project_dir):
+            return name
+    return None
+
+
+def _workspace_items(payload: object) -> list[object]:
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        for key in ("workspaces", "items", "data"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return value
+    return []
+
+
+def _workspace_projects_include(projects: object, project_dir: Path) -> bool:
+    if not isinstance(projects, list):
+        return False
+    project_path = project_dir.resolve()
+    for item in projects:
+        if isinstance(item, str) and Path(item).expanduser().resolve() == project_path:
+            return True
+        if isinstance(item, dict):
+            path = item.get("path") or item.get("project")
+            if isinstance(path, str) and Path(path).expanduser().resolve() == project_path:
+                return True
+    return False
+
+
+def _read_task_title(task_dir: Path) -> str:
+    task_json = task_dir / "task.json"
+    try:
+        data = json.loads(task_json.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return task_dir.name
+    if not isinstance(data, dict):
+        return task_dir.name
+    title = data.get("title") or data.get("name")
+    return title if isinstance(title, str) and title.strip() else task_dir.name
+
+
+def _extract_helm_issue_id(stdout: str) -> str | None:
+    try:
+        payload = json.loads(stdout or "{}")
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    for source in (payload, payload.get("issue")):
+        if not isinstance(source, dict):
+            continue
+        for key in ("id", "number"):
+            value = source.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+            if isinstance(value, int):
+                return str(value)
+    return None
 
 
 def _successful_output(result: CommandResult) -> str | None:

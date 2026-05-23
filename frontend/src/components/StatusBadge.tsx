@@ -33,6 +33,13 @@ const STATUS_CONFIG: Record<
     dot: 'bg-slate-400 dark:bg-slate-500',
     label: '等待',
   },
+  info: {
+    bg: 'bg-sky-500/8 dark:bg-sky-500/10',
+    border: 'border-sky-500/20 dark:border-sky-500/30',
+    text: 'text-sky-600 dark:text-sky-400',
+    dot: 'bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.45)]',
+    label: '提示',
+  },
 }
 
 interface StatusBadgeProps {

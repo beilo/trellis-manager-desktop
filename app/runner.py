@@ -10,6 +10,7 @@ from typing import Sequence
 
 ALLOWED_EXECUTABLES = {
     "git",
+    "helm",
     "node",
     "pnpm",
     "tl",

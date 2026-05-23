@@ -24,6 +24,7 @@ from app.config import (  # noqa: E402
 from app.ops import (  # noqa: E402
     OperationError,
     accelerated_clone_url,
+    check_helm_status,
     check_tool_repo,
     ensure_wrappers_and_path,
     ensure_zshrc_path,
@@ -31,6 +32,7 @@ from app.ops import (  # noqa: E402
     init_project,
     project_init_command,
     project_update_command,
+    push_task_to_helm,
     update_project,
 )
 from app.runner import CommandResult, CommandRunner  # noqa: E402
@@ -75,7 +77,57 @@ class CleanRunner(FakeRunner):
         return super().run(command, cwd, timeout)
 
 
+class HelmRunner:
+    def __init__(
+        self,
+        workspaces_json: str = "[]",
+        *,
+        helm_installed: bool = True,
+        fail_workspace_once: bool = False,
+    ) -> None:
+        self.workspaces_json = workspaces_json
+        self.helm_installed = helm_installed
+        self.fail_workspace_once = fail_workspace_once
+        self.workspace_calls = 0
+        self.calls: list[tuple[list[str], Path | None]] = []
+
+    def run(self, command: list[str | Path], cwd: Path | None = None, timeout: int = 60) -> CommandResult:
+        normalized = [str(part) for part in command]
+        self.calls.append((normalized, cwd))
+        if normalized == ["helm", "--version"]:
+            if self.helm_installed:
+                return self._result(normalized, cwd, "helm 0.0.17\n")
+            return CommandResult(normalized, cwd, 1, "", "helm: command not found", 1)
+        if normalized == ["helm", "workspace", "ls", "--json"]:
+            self.workspace_calls += 1
+            if self.fail_workspace_once and self.workspace_calls == 1:
+                return CommandResult(normalized, cwd, 1, "", "daemon not running", 1)
+            return self._result(normalized, cwd, self.workspaces_json)
+        if normalized == ["helm", "daemon", "start"]:
+            return self._result(normalized, cwd, "started\n")
+        if normalized[:3] == ["helm", "workspace", "new"]:
+            return self._result(normalized, cwd, '{"name":"created"}\n')
+        if normalized[:3] == ["helm", "issue", "new"]:
+            return self._result(normalized, cwd, '{"id":"ISS-1"}\n')
+        return CommandResult(normalized, cwd, 1, "", "unexpected command", 1)
+
+    def _result(self, command: list[str], cwd: Path | None, stdout: str) -> CommandResult:
+        return CommandResult(command, cwd, 0, stdout, "", 1)
+
+
 class TrellisManagerOpsTest(unittest.TestCase):
+    def _make_task(self, root: Path, *, with_prd: bool = True) -> tuple[Path, Path]:
+        project = root / "project"
+        task = project / ".trellis" / "tasks" / "05-23-helm"
+        task.mkdir(parents=True)
+        (task / "task.json").write_text(
+            json.dumps({"title": "Push Task", "status": "planning"}),
+            encoding="utf-8",
+        )
+        if with_prd:
+            (task / "prd.md").write_text("# PRD\n", encoding="utf-8")
+        return project, task
+
     def test_project_commands_use_local_wrapper_and_force_update(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             bin_dir = Path(tmp) / "bin"
@@ -115,6 +167,20 @@ class TrellisManagerOpsTest(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             runner.run(["rm", "-rf", "/tmp/anything"])
+
+    def test_command_runner_allows_helm(self) -> None:
+        runner = CommandRunner(allowed={"helm"})
+
+        result = runner._prepare_command(["helm", "--version"])  # noqa: SLF001
+
+        self.assertEqual(result, ["helm", "--version"])
+
+    def test_check_helm_status_reports_missing_cli(self) -> None:
+        status = check_helm_status(HelmRunner(helm_installed=False))  # type: ignore[arg-type]
+
+        self.assertFalse(status.ok)
+        self.assertEqual(status.status, "error")
+        self.assertEqual(status.message, "未安装 Helm")
 
     def test_command_runner_forces_git_utf8_output(self) -> None:
         runner = CommandRunner()
@@ -173,7 +239,7 @@ class TrellisManagerOpsTest(unittest.TestCase):
                 self.assertIn(str(entry), wrapper.read_text(encoding="utf-8"))
                 self.assertTrue(wrapper.stat().st_mode & stat.S_IXUSR)
 
-    def test_tool_repo_dirty_blocks_update(self) -> None:
+    def test_tool_repo_dirty_reports_info(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
             entry = repo / "packages" / "cli" / "bin" / "trellis.js"
@@ -185,8 +251,8 @@ class TrellisManagerOpsTest(unittest.TestCase):
             status = check_tool_repo(repo, FakeRunner())  # type: ignore[arg-type]
 
             self.assertTrue(status.dirty)
-            self.assertEqual(status.status, "warning")
-            self.assertIn("未提交变更", status.message)
+            self.assertEqual(status.status, "info")
+            self.assertIn("本地变更", status.message)
 
     def test_tool_repo_check_reports_remote_updates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -216,6 +282,45 @@ class TrellisManagerOpsTest(unittest.TestCase):
             self.assertTrue(report.ok)
             self.assertIn([str(Path.home() / ".beilo-trellis" / "bin" / "tl"), "update", "--force"], [call[0] for call in runner.calls])
 
+    def test_project_inspection_dirty_current_version_is_ok(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "project"
+            project.mkdir()
+            (project / ".trellis").mkdir()
+            (project / ".trellis" / ".version").write_text("0.6.0-beta.10", encoding="utf-8")
+            tool_repo = root / "tool"
+            package = tool_repo / "packages" / "cli" / "package.json"
+            package.parent.mkdir(parents=True)
+            package.write_text(json.dumps({"version": "0.6.0-beta.10"}), encoding="utf-8")
+
+            status = inspect_project(str(project), FakeRunner(), tool_repo)  # type: ignore[arg-type]
+
+            self.assertTrue(status.dirty)
+            self.assertEqual(status.status, "ok")
+            self.assertFalse(status.version_outdated)
+            self.assertEqual(status.trellis_version, "0.6.0-beta.10")
+            self.assertEqual(status.latest_version, "0.6.0-beta.10")
+
+    def test_project_inspection_warns_when_version_outdated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "project"
+            project.mkdir()
+            (project / ".trellis").mkdir()
+            (project / ".trellis" / ".version").write_text("0.6.0-beta.9", encoding="utf-8")
+            tool_repo = root / "tool"
+            package = tool_repo / "packages" / "cli" / "package.json"
+            package.parent.mkdir(parents=True)
+            package.write_text(json.dumps({"version": "0.6.0-beta.10"}), encoding="utf-8")
+
+            status = inspect_project(str(project), CleanRunner(), tool_repo)  # type: ignore[arg-type]
+
+            self.assertEqual(status.status, "warning")
+            self.assertTrue(status.version_outdated)
+            self.assertIn("0.6.0-beta.9", status.message)
+            self.assertIn("0.6.0-beta.10", status.message)
+
     def test_project_inspection_rejects_non_git_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
@@ -233,6 +338,71 @@ class TrellisManagerOpsTest(unittest.TestCase):
 
             self.assertFalse(status.is_git)
             self.assertEqual(status.status, "error")
+
+    def test_push_task_to_helm_requires_prd(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, task = self._make_task(Path(tmp), with_prd=False)
+
+            with self.assertRaises(OperationError) as error:
+                push_task_to_helm(project, task, HelmRunner())  # type: ignore[arg-type]
+
+            self.assertIn("需要 PRD 文档", str(error.exception))
+
+    def test_push_task_to_helm_uses_matching_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, task = self._make_task(Path(tmp))
+            runner = HelmRunner(json.dumps([{"name": "team", "projects": [str(project.resolve())]}]))
+
+            report = push_task_to_helm(project, task, runner)  # type: ignore[arg-type]
+
+            self.assertTrue(report.ok)
+            self.assertEqual(report.details["workspace"], "team")
+            self.assertIn("ISS-1", report.message)
+            self.assertIn(
+                [
+                    "helm",
+                    "issue",
+                    "new",
+                    "team",
+                    "Push Task",
+                    "--description-file",
+                    str(task.resolve() / "prd.md"),
+                    "--project",
+                    project.name,
+                    "--status",
+                    "todo",
+                    "--json",
+                ],
+                [call[0] for call in runner.calls],
+            )
+
+    def test_push_task_to_helm_creates_workspace_when_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, task = self._make_task(Path(tmp))
+            runner = HelmRunner("[]")
+
+            report = push_task_to_helm(project, task, runner)  # type: ignore[arg-type]
+
+            self.assertTrue(report.ok)
+            self.assertEqual(report.details["workspace"], project.name)
+            self.assertIn(
+                ["helm", "workspace", "new", project.name, "--project", str(project.resolve())],
+                [call[0] for call in runner.calls],
+            )
+
+    def test_push_task_to_helm_starts_daemon_then_retries_workspace_list(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, task = self._make_task(Path(tmp))
+            runner = HelmRunner(
+                json.dumps([{"name": "team", "projects": [str(project.resolve())]}]),
+                fail_workspace_once=True,
+            )
+
+            report = push_task_to_helm(project, task, runner)  # type: ignore[arg-type]
+
+            self.assertTrue(report.ok)
+            self.assertEqual(runner.workspace_calls, 2)
+            self.assertIn(["helm", "daemon", "start"], [call[0] for call in runner.calls])
 
     def test_config_persistence_dedupes_recent_projects(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
