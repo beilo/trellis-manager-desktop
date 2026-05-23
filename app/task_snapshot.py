@@ -66,6 +66,40 @@ class TrellisTaskSnapshot:
     archive_counts: dict[str, int]  # 归档任务统计
 
 
+@dataclass(frozen=True)
+class ProjectTasksBlock:
+    """跨项目看板中的单个项目任务块。"""
+    project_path: str
+    project_name: str
+    has_trellis: bool
+    counts: dict[str, int]
+    tasks: list[TrellisTaskItem]
+
+
+@dataclass(frozen=True)
+class AllTasksSnapshot:
+    """跨项目任务聚合快照。"""
+    projects: list[ProjectTasksBlock]
+    total_counts: dict[str, int]
+    project_count: int
+
+
+def _empty_counts() -> dict[str, int]:
+    """统一状态计数字段，避免前后端对缺失 key 的理解不一致。"""
+    return {
+        "planning": 0,
+        "in_progress": 0,
+        "completed": 0,
+        "done": 0,
+        "unknown": 0,
+    }
+
+
+def _project_name(project_path: Path) -> str:
+    """从路径提取用于看板分组展示的项目名。"""
+    return project_path.name or str(project_path)
+
+
 def normalize_status(raw: str) -> TrellisTaskStatus:
     """将 raw_status 转换为规范状态。"""
     if raw in VALID_STATUSES:
@@ -240,13 +274,7 @@ def read_task_snapshot(project_path: str, include_archive: bool = False) -> Trel
     tasks = compute_children_progress(tasks, archived_tasks)
 
     # 统计 active 各状态数量
-    counts: dict[str, int] = {
-        "planning": 0,
-        "in_progress": 0,
-        "completed": 0,
-        "done": 0,
-        "unknown": 0,
-    }
+    counts = _empty_counts()
     for t in tasks:
         counts[t.status] = counts.get(t.status, 0) + 1
 
@@ -259,4 +287,30 @@ def read_task_snapshot(project_path: str, include_archive: bool = False) -> Trel
         errors=errors,
         archived_groups=archived_groups,
         archive_counts=archive_counts,
+    )
+
+
+def read_all_task_snapshots(project_paths: list[str]) -> AllTasksSnapshot:
+    """读取所有已配置项目的 active 任务快照，供跨项目看板使用。"""
+    projects: list[ProjectTasksBlock] = []
+    total_counts = _empty_counts()
+
+    for project_path in project_paths:
+        path = Path(project_path).expanduser().resolve()
+        snapshot = read_task_snapshot(str(path), include_archive=False)
+        for status, count in snapshot.counts.items():
+            total_counts[status] = total_counts.get(status, 0) + count
+
+        projects.append(ProjectTasksBlock(
+            project_path=snapshot.project_path,
+            project_name=_project_name(path),
+            has_trellis=snapshot.has_trellis,
+            counts=snapshot.counts,
+            tasks=snapshot.tasks,
+        ))
+
+    return AllTasksSnapshot(
+        projects=projects,
+        total_counts=total_counts,
+        project_count=len(projects),
     )

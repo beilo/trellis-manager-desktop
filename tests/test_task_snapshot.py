@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from app.task_snapshot import (
+    read_all_task_snapshots,
     read_task_snapshot,
     normalize_status,
     compute_children_progress,
@@ -216,6 +217,26 @@ class TestTaskSnapshot(unittest.TestCase):
         self.assertEqual(result.counts["planning"], 2)
         self.assertEqual(result.counts["in_progress"], 1)
         self.assertEqual(result.counts["completed"], 1)
+
+    def test_read_all_task_snapshots(self):
+        """跨项目聚合快照应汇总每个项目的任务与统计。"""
+        first = self.project_dir / "first"
+        second = self.project_dir / "second"
+        for project, status in [(first, "planning"), (second, "in_progress")]:
+            task_dir = project / ".trellis" / "tasks" / f"01-01-{project.name}"
+            task_dir.mkdir(parents=True)
+            (task_dir / "task.json").write_text(json.dumps({
+                "title": f"{project.name} task",
+                "status": status,
+            }))
+
+        result = read_all_task_snapshots([str(first), str(second)])
+
+        self.assertEqual(result.project_count, 2)
+        self.assertEqual(result.total_counts["planning"], 1)
+        self.assertEqual(result.total_counts["in_progress"], 1)
+        self.assertEqual(result.projects[0].project_name, "first")
+        self.assertEqual(result.projects[1].tasks[0].title, "second task")
 
     def test_subtasks_alias(self):
         """支持 subtasks 别名字段"""

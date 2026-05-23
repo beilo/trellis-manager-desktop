@@ -9,6 +9,8 @@ import type { EnvironmentItem, TrellisTaskSnapshot, TrellisTaskItem, ProjectStat
 interface TaskManagerPanelProps {
   projectPath: string | null
   projectStatus: ProjectStatus | null
+  highlightTaskPath?: string | null
+  onHighlightConsumed?: () => void
 }
 
 function EmptyState({ message, action }: { message: string; action?: React.ReactNode }) {
@@ -20,7 +22,12 @@ function EmptyState({ message, action }: { message: string; action?: React.React
   )
 }
 
-export function TaskManagerPanel({ projectPath, projectStatus }: TaskManagerPanelProps) {
+export function TaskManagerPanel({
+  projectPath,
+  projectStatus,
+  highlightTaskPath = null,
+  onHighlightConsumed,
+}: TaskManagerPanelProps) {
   const [snapshot, setSnapshot] = useState<TrellisTaskSnapshot | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedTask, setSelectedTask] = useState<TrellisTaskItem | null>(null)
@@ -37,7 +44,13 @@ export function TaskManagerPanel({ projectPath, projectStatus }: TaskManagerPane
       setSnapshot(snap)
       // 刷新后保持选中，或在 active 任务中选第一个。
       const activeTasks = snap.tasks.filter(t => !t.archived)
+      const highlightedTask = highlightTaskPath
+        ? snap.tasks.find(t => t.path === highlightTaskPath) ?? null
+        : null
       setSelectedTask((current) => {
+        if (highlightedTask) {
+          return highlightedTask
+        }
         if (activeTasks.length > 0 && !current) {
           return activeTasks[0]
         }
@@ -51,6 +64,10 @@ export function TaskManagerPanel({ projectPath, projectStatus }: TaskManagerPane
         }
         return null
       })
+      if (highlightTaskPath) {
+        // 外部高亮只消费一次，避免后续刷新反复抢占用户当前选中任务。
+        onHighlightConsumed?.()
+      }
       // Helm 状态跟随任务刷新一起更新，用于详情按钮禁用原因。
       const status = await api.checkHelmStatus()
       setHelmStatus(status)
@@ -60,7 +77,7 @@ export function TaskManagerPanel({ projectPath, projectStatus }: TaskManagerPane
       setLoading(false)
       setHelmLoading(false)
     }
-  }, [projectPath, includeArchive])
+  }, [projectPath, includeArchive, highlightTaskPath, onHighlightConsumed])
 
   useEffect(() => {
     let cancelled = false

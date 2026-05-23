@@ -1,7 +1,7 @@
 import { StatusBadge } from './StatusBadge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { FolderGit2, Wrench } from 'lucide-react'
+import { FolderGit2, LayoutDashboard, Wrench } from 'lucide-react'
 import type { ActiveTab, PlatformInfo, Status } from '@/types'
 
 interface HeaderProps {
@@ -56,6 +56,20 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange }: He
           >
             <FolderGit2 data-icon="inline-start" />
             项目
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onTabChange('kanban')}
+            className={cn(
+              'h-8 transition-all duration-150',
+              activeTab === 'kanban'
+                ? 'bg-blue-500 text-white shadow-md font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+            )}
+          >
+            <LayoutDashboard data-icon="inline-start" />
+            看板
           </Button>
         </div>
         <div className="flex items-center gap-2 shrink-0">

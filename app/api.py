@@ -33,7 +33,7 @@ from app.ops import (
     push_task_to_helm,
     update_project,
 )
-from app.task_snapshot import read_task_snapshot
+from app.task_snapshot import read_all_task_snapshots, read_task_snapshot
 from app.runner import CommandRunner
 
 if TYPE_CHECKING:
@@ -228,6 +228,13 @@ class TrellisAPI:
         """读取业务项目的 Trellis 任务快照。"""
         snapshot = read_task_snapshot(path, include_archive)
         # 统一复用桥接层已有序列化逻辑，避免 API 层漏导入 dataclasses.asdict。
+        return dataclass_to_dict(snapshot)
+
+    def list_all_tasks(self) -> dict[str, Any]:
+        """聚合所有已配置项目的 active 任务快照。"""
+        project_paths = [str(path) for path in self._config.projects]
+        snapshot = read_all_task_snapshots(project_paths)
+        # 看板只消费配置内项目，避免 API 层隐式扫描磁盘扩大范围。
         return dataclass_to_dict(snapshot)
 
     def open_task_directory(self, task_path: str) -> None:

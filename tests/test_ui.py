@@ -120,6 +120,28 @@ class TrellisManagerUiTest(unittest.TestCase):
             self.assertEqual(result["tasks"][0]["title"], "API Task")
             self.assertEqual(result["counts"]["planning"], 1)
 
+    def test_list_all_tasks_serializes_configured_projects(self) -> None:
+        """看板 API 只聚合配置内项目，并返回前端可消费的字典。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "config.json"
+            repo = Path(tmp) / "Trellis"
+            project = Path(tmp) / "project"
+            task_dir = project / ".trellis" / "tasks" / "05-23-kanban"
+            task_dir.mkdir(parents=True)
+            (task_dir / "task.json").write_text(
+                '{"title": "Kanban Task", "status": "in_progress"}',
+                encoding="utf-8",
+            )
+            save_config(ManagerConfig(trellis_repo=repo, projects=[project]), config_path)
+
+            api = TrellisAPI(config_file=config_path)
+            result = api.list_all_tasks()
+
+            self.assertEqual(result["project_count"], 1)
+            self.assertEqual(result["total_counts"]["in_progress"], 1)
+            self.assertEqual(result["projects"][0]["project_name"], "project")
+            self.assertEqual(result["projects"][0]["tasks"][0]["title"], "Kanban Task")
+
     def test_helm_api_serializes_status_and_push_report(self) -> None:
         """API 层应把 Helm 状态和推送结果序列化给前端。"""
         with tempfile.TemporaryDirectory() as tmp:

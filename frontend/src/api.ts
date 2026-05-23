@@ -1,10 +1,12 @@
 import type {
+  AllTasksSnapshot,
   EnvironmentItem,
   ManagerConfig,
   OperationReport,
   OperationLogEntry,
   PlatformInfo,
   ProjectStatus,
+  ProjectTasksBlock,
   RepoStatus,
   ToolCommandStatus,
   TrellisTaskSnapshot,
@@ -43,6 +45,7 @@ interface PywebviewAPI {
   open_directory(path: string): Promise<void>
   open_in_iterm(path: string): Promise<void>
   list_project_tasks(path: string, include_archive: boolean): Promise<TrellisTaskSnapshot>
+  list_all_tasks?: () => Promise<AllTasksSnapshot>
   open_task_directory(task_path: string): Promise<void>
   push_task_to_helm(project_path: string, task_path: string): Promise<OperationReport>
 }
@@ -76,6 +79,52 @@ async function getApi(): Promise<PywebviewAPI> {
   if (_api) return _api
   _api = await waitForPywebview()
   return _api
+}
+
+function emptyCounts(): Record<string, number> {
+  return {
+    planning: 0,
+    in_progress: 0,
+    completed: 0,
+    done: 0,
+    unknown: 0,
+  }
+}
+
+function projectName(path: string): string {
+  const normalized = path.replace(/[\\/]+$/, '')
+  return normalized.split(/[\\/]/).pop() || normalized
+}
+
+async function listAllTasksCompat(bridge: PywebviewAPI): Promise<AllTasksSnapshot> {
+  if (typeof bridge.list_all_tasks === 'function') {
+    return bridge.list_all_tasks()
+  }
+
+  // 兼容正在运行的旧桌面后端：前端热更新后，新桥接方法不存在时复用旧接口聚合。
+  const projectPaths = await bridge.get_projects()
+  const totalCounts = emptyCounts()
+  const projects: ProjectTasksBlock[] = await Promise.all(
+    projectPaths.map(async (path) => {
+      const snapshot = await bridge.list_project_tasks(path, false)
+      for (const [status, count] of Object.entries(snapshot.counts)) {
+        totalCounts[status] = (totalCounts[status] ?? 0) + count
+      }
+      return {
+        project_path: snapshot.project_path,
+        project_name: projectName(snapshot.project_path),
+        has_trellis: snapshot.has_trellis,
+        counts: snapshot.counts,
+        tasks: snapshot.tasks,
+      }
+    }),
+  )
+
+  return {
+    projects,
+    total_counts: totalCounts,
+    project_count: projects.length,
+  }
 }
 
 export const api = {
@@ -176,6 +225,10 @@ export const api = {
     includeArchive: boolean = false
   ): Promise<TrellisTaskSnapshot> {
     return (await getApi()).list_project_tasks(path, includeArchive)
+  },
+
+  async listAllTasks(): Promise<AllTasksSnapshot> {
+    return listAllTasksCompat(await getApi())
   },
 
   async openTaskDirectory(taskPath: string): Promise<void> {

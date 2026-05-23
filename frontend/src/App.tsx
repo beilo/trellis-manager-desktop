@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { Wrench, FolderGit2 } from 'lucide-react'
+import { FolderGit2, Wrench } from 'lucide-react'
 import { Header } from './components/Header'
 import { SummaryCards, type SummaryState } from './components/SummaryCards'
 import { EnvironmentCard } from './components/EnvironmentCard'
@@ -10,6 +10,7 @@ import { ProjectCard } from './components/ProjectCard'
 import { ProjectList } from './components/ProjectList'
 import { LogPanel } from './components/LogPanel'
 import { TaskManagerPanel } from './components/TaskManagerPanel'
+import { KanbanPanel } from './components/KanbanPanel'
 import { api } from './api'
 import type {
   ActiveTab,
@@ -59,7 +60,10 @@ function operationLogToEntries(entry: OperationLogEntry): LogEntry[] {
 }
 
 function getInitialTab(): ActiveTab {
-  return window.localStorage.getItem(LAST_TAB_KEY) === 'toolchain' ? 'toolchain' : 'projects'
+  const stored = window.localStorage.getItem(LAST_TAB_KEY)
+  return stored === 'toolchain' || stored === 'projects' || stored === 'kanban'
+    ? stored
+    : 'projects'
 }
 
 function dedupeProjects(paths: string[]): string[] {
@@ -98,6 +102,7 @@ export default function App() {
   // 多项目状态
   const [projects, setProjects] = useState<string[]>([])
   const [selectedProject, setSelectedProject] = useState<string | null>(null)
+  const [highlightTaskPath, setHighlightTaskPath] = useState<string | null>(null)
   const [projectStatuses, setProjectStatuses] = useState<Record<string, ProjectStatus>>({})
   const [projectLoading, setProjectLoading] = useState(false)
   const [projectBusy, setProjectBusy] = useState(false)
@@ -312,6 +317,21 @@ export default function App() {
   const handleTabChange = useCallback((tab: ActiveTab) => {
     setActiveTab(tab)
     window.localStorage.setItem(LAST_TAB_KEY, tab)
+  }, [])
+
+  const handleNavigateToTask = useCallback(async (projectPath: string, taskPath: string) => {
+    // 看板点击后复用项目 Tab 的 TaskDetail，避免在看板内重复实现任务操作。
+    setSelectedProject(projectPath)
+    setHighlightTaskPath(taskPath)
+    handleTabChange('projects')
+    await api.saveSelectedProject(projectPath)
+    if (!projectStatuses[projectPath]) {
+      await inspectProjectInner(projectPath, true)
+    }
+  }, [handleTabChange, inspectProjectInner, projectStatuses])
+
+  const handleHighlightConsumed = useCallback(() => {
+    setHighlightTaskPath(null)
   }, [])
 
   const handleCheckProject = useCallback(async (path?: string) => {
@@ -539,7 +559,7 @@ export default function App() {
               onRefresh={checkCommandsInner}
             />
           </div>
-        ) : (
+        ) : activeTab === 'projects' ? (
           <div className="grid grid-cols-1 lg:grid-cols-[18rem_minmax(0,1fr)] gap-6 items-start my-1">
             <ProjectList
               projects={projects}
@@ -578,9 +598,13 @@ export default function App() {
               <TaskManagerPanel
                 projectPath={selectedProject}
                 projectStatus={selectedProjectStatus}
+                highlightTaskPath={highlightTaskPath}
+                onHighlightConsumed={handleHighlightConsumed}
               />
             </div>
           </div>
+        ) : (
+          <KanbanPanel onNavigateToTask={handleNavigateToTask} />
         )}
 
         <LogPanel

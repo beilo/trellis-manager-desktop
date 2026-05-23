@@ -49,6 +49,20 @@ export interface TrellisTaskSnapshot {
   archive_counts: Record<string, number>
 }
 
+export interface ProjectTasksBlock {
+  project_path: string
+  project_name: string
+  has_trellis: boolean
+  counts: Record<string, number>
+  tasks: TrellisTaskItem[]
+}
+
+export interface AllTasksSnapshot {
+  projects: ProjectTasksBlock[]
+  total_counts: Record<string, number>
+  project_count: number
+}
+
 export interface EnvironmentItem {
   name: string
   ok: boolean
@@ -123,7 +137,7 @@ export interface ManagerConfig {
   recent_projects: string[]
 }
 
-export type ActiveTab = 'toolchain' | 'projects'
+export type ActiveTab = 'toolchain' | 'projects' | 'kanban'
 
 export interface AppState {
   activeTab: ActiveTab
