@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { LayoutDashboard, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { AppInput } from './AppInput'
 import { KanbanTaskCard } from './KanbanTaskCard'
 import { api } from '@/api'
@@ -145,7 +146,6 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
 
   const totalCounts = snapshot?.total_counts ?? {}
   const hasProjects = (snapshot?.project_count ?? 0) > 0
-  const hasVisibleTasks = Object.values(boardColumns).some((items) => items.length > 0)
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
@@ -238,41 +238,40 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
         </div>
       ) : null}
 
-      {hasProjects && !hasVisibleTasks && !loading ? (
-        <div className="rounded-lg border bg-card px-5 py-12 text-center text-sm text-muted-foreground">
-          暂无匹配任务
-        </div>
-      ) : null}
-
-      {hasVisibleTasks ? (
-        <div className="grid gap-4 xl:grid-cols-3">
-          {(Object.keys(COLUMN_TITLES) as BoardColumn[]).map((column) => {
-            const tasks = boardColumns[column]
-            return (
-              <section key={column} className="flex min-h-0 flex-col gap-3 rounded-2xl border bg-card/70 p-3 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-foreground">{COLUMN_TITLES[column]}</h3>
-                  <span className="shrink-0 text-xs text-muted-foreground">{tasks.length} 个任务</span>
-                </div>
-                <div className="flex min-h-0 flex-1 flex-col gap-2">
-                  {tasks.length > 0 ? (
-                    tasks.map(({ project_path, project_name, task }) => (
-                      <KanbanTaskCard
-                        key={task.path}
-                        task={task}
-                        projectName={project_name}
-                        onClick={() => onNavigateToTask(project_path, task.path)}
-                      />
-                    ))
-                  ) : (
-                    <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
-                      暂无任务
+      {hasProjects ? (
+        <div className="overflow-x-auto pb-1">
+          {/* 三列始终保留，空筛选结果也展示列占位，避免看板结构跳变。 */}
+          <div className="grid min-w-[52rem] grid-cols-[repeat(3,minmax(0,1fr))] gap-4">
+            {(Object.keys(COLUMN_TITLES) as BoardColumn[]).map((column) => {
+              const tasks = boardColumns[column]
+              return (
+                <section key={column} className="flex min-h-0 flex-col gap-3 rounded-2xl border bg-card/70 p-3 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-foreground">{COLUMN_TITLES[column]}</h3>
+                    <span className="shrink-0 text-xs text-muted-foreground">{tasks.length} 个任务</span>
+                  </div>
+                  <ScrollArea className="h-[28rem]">
+                    <div className="flex min-h-full flex-col gap-2 pr-2">
+                      {tasks.length > 0 ? (
+                        tasks.map(({ project_path, project_name, task }) => (
+                          <KanbanTaskCard
+                            key={task.path}
+                            task={task}
+                            projectName={project_name}
+                            onClick={() => onNavigateToTask(project_path, task.path)}
+                          />
+                        ))
+                      ) : (
+                        <div className="flex min-h-[10rem] items-center justify-center rounded-lg border border-dashed bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
+                          暂无任务
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </section>
-            )
-          })}
+                  </ScrollArea>
+                </section>
+              )
+            })}
+          </div>
         </div>
       ) : null}
     </div>
