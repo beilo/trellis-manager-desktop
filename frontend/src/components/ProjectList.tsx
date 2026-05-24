@@ -1,9 +1,9 @@
-import { FolderGit2, Plus, Rows3, X } from 'lucide-react'
+import { FolderGit2, Loader2, Plus, Rows3, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { StatusBadge } from './StatusBadge'
-import type { ProjectStatus } from '@/types'
+import type { ProjectStatus, ProjectTaskCounts } from '@/types'
 
 type HealthTone = 'ok' | 'warning' | 'error' | 'unknown' | 'dirty'
 
@@ -88,10 +88,25 @@ function projectLabel(status: ProjectStatus | undefined): { label: string } {
   return { label: '正常' }
 }
 
+function TaskCountPill({ count, loading }: { count: number; loading: boolean }) {
+  // 项目列表只展示 active 进行中任务数，避免把归档任务混进左侧导航。
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700"
+      title="进行中任务数"
+    >
+      {loading && <Loader2 className="size-2.5 animate-spin" />}
+      进行中 {count}
+    </span>
+  )
+}
+
 interface ProjectListProps {
   projects: string[]
   selectedProject: string | null
   statuses: Record<string, ProjectStatus>
+  taskCounts: ProjectTaskCounts
+  taskCountsLoading: boolean
   busy: boolean
   batchUpdateCount: number
   batchUpdateLoading: boolean
@@ -110,6 +125,8 @@ export function ProjectList({
   projects,
   selectedProject,
   statuses,
+  taskCounts,
+  taskCountsLoading,
   busy,
   batchUpdateCount,
   batchUpdateLoading,
@@ -124,7 +141,9 @@ export function ProjectList({
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-sm font-bold text-foreground">项目列表</span>
           <span className="text-xs text-muted-foreground">
-            {projects.length} 个本地项目 · {batchUpdateLoading ? '正在检查过期项目…' : batchUpdateCount > 0 ? `${batchUpdateCount} 个待更新` : '暂无待更新'}
+            {projects.length} 个本地项目
+            · {batchUpdateLoading ? '正在检查过期项目…' : batchUpdateCount > 0 ? `${batchUpdateCount} 个待更新` : '暂无待更新'}
+            {taskCountsLoading ? ' · 正在刷新任务数…' : ''}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -160,6 +179,9 @@ export function ProjectList({
               const status = projectStatus?.status ?? 'unknown'
               const health = projectHealth(projectStatus)
               const summary = projectLabel(projectStatus)
+              const counts = taskCounts[path]
+              const showCounts = Boolean(counts) || Boolean(projectStatus?.has_trellis)
+              const inProgressCount = counts?.in_progress ?? 0
               return (
                 <div
                   key={path}
@@ -196,6 +218,9 @@ export function ProjectList({
                             dotClassName={item.tone === 'dirty' ? 'bg-orange-500' : undefined}
                           />
                         ))}
+                        {showCounts && (
+                          <TaskCountPill count={inProgressCount} loading={taskCountsLoading && !counts} />
+                        )}
                       </div>
                     </div>
                     <span className="truncate text-xs text-muted-foreground" title={`${path}\n${projectStatus?.message ?? '状态尚未加载'}`}>
