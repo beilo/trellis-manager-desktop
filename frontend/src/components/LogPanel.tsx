@@ -18,13 +18,14 @@ const LEVEL_STYLES: Record<LogLevel, { color: string; prefix: string }> = {
 interface LogPanelProps {
   entries: LogEntry[]
   autoOpen: boolean
+  openSignal?: number
   onCopy: () => void
   onClear: () => void
 }
 
 type PanelState = 'collapsed' | 'expanded' | 'maximized'
 
-export function LogPanel({ entries, autoOpen, onCopy, onClear }: LogPanelProps) {
+export function LogPanel({ entries, autoOpen, openSignal = 0, onCopy, onClear }: LogPanelProps) {
   const [panelState, setPanelState] = useState<PanelState>('collapsed')
   const scrollRootRef = useRef<HTMLDivElement>(null)
   const prevLengthRef = useRef(entries.length)
@@ -39,6 +40,15 @@ export function LogPanel({ entries, autoOpen, onCopy, onClear }: LogPanelProps) 
     }
     prevLengthRef.current = entries.length
   }, [autoOpen, entries])
+
+  useEffect(() => {
+    if (openSignal === 0) return
+    // 外部“查看日志”按钮只发信号，不提升控制台内部展开状态到 App。
+    const frame = window.requestAnimationFrame(() => {
+      setPanelState((current) => current === 'maximized' ? current : 'expanded')
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [openSignal])
 
   // Scroll to bottom on new entries
   useEffect(() => {

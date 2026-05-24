@@ -141,6 +141,16 @@ interface AppState {
 - 操作完成后更新项目状态缓存
 - 日志输出到 LogPanel
 
+### 4.6 批量 Update 与工具链配置
+
+- 工具链 Tab Summary 区域展示过期项目数量，并提供批量 Update 入口
+- 项目 Tab 的项目列表顶部提供同一批量 Update 入口
+- 批量 Update 对话框调用 `list_outdated_projects()`，默认全选过期项目，dirty 项目默认由后端跳过
+- 勾选“允许 dirty 项目更新”后调用 `batch_update_projects(paths, allow_dirty=true)`
+- 结果表保留成功、失败、跳过状态和消息，并提供跳转底部日志的入口
+- Header 齿轮打开工具链设置；工具链 Tab 内保留设置卡片
+- 设置页只编辑官方仓库 URL、加速镜像 URL、分发分支，工具仓库路径仍由 RepoCard 管理
+
 ## 5. API 扩展
 
 ### 5.1 新增 API
@@ -235,3 +245,5 @@ interface PywebviewAPI {
 4. Init/Update 操作正确更新项目状态
 5. 应用重启后恢复上次状态
 6. 工具链 Tab 不显示项目相关内容
+7. 批量 Update 单项失败不阻断后续项目，完成后刷新项目状态
+8. 设置保存后重启仍生效，URL/分支校验阻止无效输入

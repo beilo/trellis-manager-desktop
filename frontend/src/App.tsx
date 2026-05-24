@@ -15,7 +15,9 @@ import { TaskManagerPanel } from './components/TaskManagerPanel'
 import { KanbanPanel } from './components/KanbanPanel'
 import { UpdatePreviewDialog } from './components/UpdatePreviewDialog'
 import { BatchUpdateCard } from './components/BatchUpdateCard'
+import { BatchUpdateDialog } from './components/BatchUpdateDialog'
 import { SettingsCard } from './components/SettingsCard'
+import { SettingsDialog } from './components/SettingsDialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs'
 import { api } from './api'
 import { installRefreshCoordinator, useRefreshSubscription } from './refreshCoordinator'
@@ -93,6 +95,8 @@ function projectName(path: string): string {
 export default function App() {
   const [platformInfo, setPlatformInfo] = useState<PlatformInfo | null>(null)
   const [activeTab, setActiveTab] = useState<ActiveTab>(getInitialTab)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [batchUpdateOpen, setBatchUpdateOpen] = useState(false)
 
   // ── 系统主题自动同步 ──
   useEffect(() => {
@@ -133,6 +137,9 @@ export default function App() {
   const [projectPane, setProjectPane] = useState<ProjectPane>('tasks')
   const [highlightTaskPath, setHighlightTaskPath] = useState<string | null>(null)
   const [projectStatuses, setProjectStatuses] = useState<Record<string, ProjectStatus>>({})
+  // 过期项目列表由 App 统一缓存，保证工具链入口、项目入口和对话框使用同一份数据。
+  const [outdatedProjects, setOutdatedProjects] = useState<ProjectStatus[]>([])
+  const [outdatedLoading, setOutdatedLoading] = useState(false)
   const [projectLoading, setProjectLoading] = useState(false)
   const [projectBusy, setProjectBusy] = useState(false)
   const [allowDirty, setAllowDirty] = useState(false)
@@ -143,6 +150,7 @@ export default function App() {
   // 操作日志
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
   const [logAutoOpenEnabled, setLogAutoOpenEnabled] = useState(false)
+  const [logOpenSignal, setLogOpenSignal] = useState(0)
 
   const addLogs = useCallback((...entries: LogEntry[]) => {
     setLogEntries((prev) => [...prev, ...entries])
@@ -151,6 +159,22 @@ export default function App() {
   const addLog = useCallback((level: LogLevel, text: string) => {
     addLogs(mkLog(level, text))
   }, [addLogs])
+
+  const requestOpenLogPanel = useCallback(() => {
+    setLogOpenSignal((current) => current + 1)
+  }, [])
+
+  const loadOutdatedProjectsInner = useCallback(async () => {
+    setOutdatedLoading(true)
+    try {
+      const result = await api.listOutdatedProjects()
+      setOutdatedProjects(result)
+    } catch (err) {
+      addLog('error', `失败：刷新过期项目列表 - ${err}`)
+    } finally {
+      setOutdatedLoading(false)
+    }
+  }, [addLog])
 
   // ── 顶部状态摘要 ──
 
@@ -383,6 +407,18 @@ export default function App() {
     window.localStorage.setItem(LAST_TAB_KEY, tab)
   }, [])
 
+  const handleOpenBatchUpdate = useCallback(() => {
+    setBatchUpdateOpen(true)
+  }, [])
+
+  const handleOpenSettings = useCallback(() => {
+    setSettingsOpen(true)
+  }, [])
+
+  useEffect(() => {
+    void Promise.resolve().then(loadOutdatedProjectsInner)
+  }, [projects, loadOutdatedProjectsInner])
+
   const handleNavigateToTask = useCallback(async (projectPath: string, taskPath: string) => {
     // 看板点击后复用项目 Tab 的 TaskDetail，避免在看板内重复实现任务操作。
     setSelectedProject(projectPath)
@@ -469,12 +505,13 @@ export default function App() {
       const report = await api.initProject(selectedProject)
       addLogs(...reportToLogs(report))
       await inspectProjectInner(selectedProject, true)
+      await loadOutdatedProjectsInner()
     } catch (err) {
       addLog('error', `失败：初始化业务项目 - ${err}`)
     } finally {
       setProjectBusy(false)
     }
-  }, [selectedProject, addLog, addLogs, inspectProjectInner])
+  }, [selectedProject, addLog, addLogs, inspectProjectInner, loadOutdatedProjectsInner])
 
   const handleUpdateProject = useCallback(async () => {
     if (!selectedProject) return
@@ -514,13 +551,14 @@ export default function App() {
       setUpdatePreviewOpen(false)
       setUpdatePreview(null)
       await inspectProjectInner(selectedProject, true)
+      await loadOutdatedProjectsInner()
     } catch (err) {
       addLog('error', `失败：更新业务项目 - ${err}`)
     } finally {
       setUpdatePreviewBusy(false)
       setProjectBusy(false)
     }
-  }, [selectedProject, addLog, addLogs, inspectProjectInner])
+  }, [selectedProject, addLog, addLogs, inspectProjectInner, loadOutdatedProjectsInner])
 
   const handleOpenDir = useCallback(async () => {
     if (!selectedProject) return
@@ -539,6 +577,13 @@ export default function App() {
       throw err
     }
   }, [selectedProject, addLog])
+
+  const handleBatchUpdateCompleted = useCallback(async () => {
+    addLog('info', '批量 Update 已结束，正在刷新项目状态。')
+    await inspectProjectsInner(projects)
+    await loadOutdatedProjectsInner()
+    requestOpenLogPanel()
+  }, [addLog, inspectProjectsInner, projects, loadOutdatedProjectsInner, requestOpenLogPanel])
 
   // ── 初始化 ──
 
@@ -624,10 +669,21 @@ export default function App() {
           readyStatus={readyStatus}
           activeTab={activeTab}
           onTabChange={handleTabChange}
+          onOpenSettings={handleOpenSettings}
         />
 
         {activeTab === 'toolchain' && (
-          <SummaryCards state={summaryState} showProject={false} />
+          <>
+            <SummaryCards state={summaryState} showProject={false} />
+            <div className="mx-auto w-full max-w-5xl">
+              <BatchUpdateCard
+                outdatedCount={outdatedProjects.length}
+                loading={outdatedLoading}
+                onRefresh={() => void loadOutdatedProjectsInner()}
+                onOpen={handleOpenBatchUpdate}
+              />
+            </div>
+          </>
         )}
 
         {activeTab === 'toolchain' ? (
@@ -679,7 +735,10 @@ export default function App() {
               selectedProject={selectedProject}
               statuses={projectStatuses}
               busy={projectBusy}
+              batchUpdateCount={outdatedProjects.length}
+              batchUpdateLoading={outdatedLoading}
               onAdd={handleAddProject}
+              onOpenBatchUpdate={handleOpenBatchUpdate}
               onSelect={handleSelectProject}
               onRemove={handleRemoveProject}
             />
@@ -713,13 +772,6 @@ export default function App() {
 
               <ProjectGitPanel projectPath={selectedProject} projectStatus={selectedProjectStatus} />
 
-              <BatchUpdateCard
-                onCompleted={() => {
-                  addLog('info', '批量 Update 已结束，正在刷新项目状态。')
-                  void inspectProjectsInner(projects)
-                }}
-              />
-
               <Tabs value={projectPane} onValueChange={(value) => setProjectPane(value as ProjectPane)}>
                 <TabsList className="w-fit">
                   <TabsTrigger value="tasks">任务</TabsTrigger>
@@ -750,8 +802,28 @@ export default function App() {
         <LogPanel
           entries={logEntries}
           autoOpen={logAutoOpenEnabled}
+          openSignal={logOpenSignal}
           onCopy={handleCopyLogs}
           onClear={handleClearLogs}
+        />
+
+        <BatchUpdateDialog
+          open={batchUpdateOpen}
+          projects={outdatedProjects}
+          loading={outdatedLoading}
+          onClose={() => setBatchUpdateOpen(false)}
+          onRefresh={loadOutdatedProjectsInner}
+          onCompleted={handleBatchUpdateCompleted}
+          onOpenLog={requestOpenLogPanel}
+        />
+
+        <SettingsDialog
+          open={settingsOpen}
+          repoPath={repoPath}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={() => {
+            addLog('info', '工具链设置已更新。')
+          }}
         />
 
         {updatePreviewOpen && selectedProject && updatePreview && (

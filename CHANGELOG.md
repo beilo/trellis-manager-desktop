@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Manager P3 批量 Update 与配置页**：工具链页新增过期项目入口和设置齿轮，项目页新增批量 Update 操作栏与结果对话框，配置页复用现有 settings API 并支持 URL / 分支校验、恢复默认和保存持久化。
 - **前端文件监听自动刷新**：接入 `window.onTrellisFileChange`，任务变更自动刷新当前项目任务管理与跨项目看板，版本变更自动刷新当前项目健康状态，并保留旧后端 no-op 降级。
 - **Manager 批量项目更新 API**：新增落后项目筛选、批量更新聚合结果、dirty 默认跳过、单项失败继续执行、单条聚合 operation log、pywebview 桥接与前端类型/API 包装，并补充后端与桥接单元测试。
 - **SafeFileReader 与 Trellis 文件读取 API**：新增受限只读文件读取后端、任务文档/Context JSONL 桥接 API、前端类型与 API 包装，并补充路径穿越、符号链接逃逸、超大文件、缺失文件、非 UTF-8 与 JSONL 部分成功单元测试。
