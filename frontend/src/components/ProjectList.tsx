@@ -5,29 +5,44 @@ import { cn } from '@/lib/utils'
 import { StatusBadge } from './StatusBadge'
 import type { ProjectStatus } from '@/types'
 
-type HealthTone = 'ok' | 'warning' | 'error' | 'unknown'
+type HealthTone = 'ok' | 'warning' | 'error' | 'unknown' | 'dirty'
 
 interface HealthPillProps {
   tone: HealthTone
   label: string
   title: string
+  dotClassName?: string
 }
 
-function HealthPill({ tone, label, title }: HealthPillProps) {
+function HealthPill({ tone, label, title, dotClassName }: HealthPillProps) {
   const classes: Record<HealthTone, string> = {
     ok: 'border-emerald-200 bg-emerald-50 text-emerald-700',
     warning: 'border-amber-200 bg-amber-50 text-amber-700',
     error: 'border-rose-200 bg-rose-50 text-rose-700',
     unknown: 'border-slate-200 bg-slate-50 text-slate-600',
+    dirty: 'border-orange-200 bg-orange-50 text-orange-700',
   }
 
   return (
-    <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold', classes[tone])} title={title}>
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+        classes[tone],
+      )}
+      title={title}
+    >
+      {dotClassName ? <span className={cn('size-1.5 rounded-full', dotClassName)} /> : null}
       {label}
     </span>
   )
 }
 
+function compactVersion(value: string | null): string {
+  if (!value) return 'v-'
+  return value.startsWith('v') ? value : `v${value}`
+}
+
+// 只使用现有 ProjectStatus 字段生成紧凑健康指示，避免引入额外任务请求。
 function projectHealth(status: ProjectStatus | undefined): Array<{ tone: HealthTone; label: string; title: string }> {
   if (!status) {
     return [{ tone: 'unknown', label: '未检查', title: '项目状态尚未加载' }]
@@ -35,13 +50,25 @@ function projectHealth(status: ProjectStatus | undefined): Array<{ tone: HealthT
 
   const items: Array<{ tone: HealthTone; label: string; title: string }> = []
   if (!status.has_trellis) {
-    items.push({ tone: 'warning', label: '未初始化', title: status.message })
+    items.push({ tone: 'warning', label: '未 init', title: status.message })
   } else if (status.version_outdated) {
-    items.push({ tone: 'warning', label: '版本过期', title: status.latest_version ? `当前 ${status.trellis_version ?? '-'}，最新 ${status.latest_version}` : status.message })
+    const current = status.trellis_version ?? '-'
+    const latest = status.latest_version ?? '-'
+    items.push({
+      tone: 'warning',
+      label: `${compactVersion(status.trellis_version)}→${compactVersion(status.latest_version)}`,
+      title: status.latest_version
+        ? `当前 ${current}，最新 ${latest}`
+        : status.message,
+    })
   }
 
   if (status.dirty) {
-    items.push({ tone: 'error', label: 'Dirty', title: '项目工作区存在未提交修改' })
+    items.push({
+      tone: 'dirty',
+      label: 'dirty',
+      title: '项目工作区存在未提交修改',
+    })
   }
 
   if (items.length === 0) {
@@ -147,7 +174,13 @@ export function ProjectList({
                       </span>
                       <div className="flex min-w-0 shrink-0 flex-wrap gap-1">
                         {health.map((item) => (
-                          <HealthPill key={`${path}-${item.label}`} tone={item.tone} label={item.label} title={item.title} />
+                          <HealthPill
+                            key={`${path}-${item.label}`}
+                            tone={item.tone}
+                            label={item.label}
+                            title={item.title}
+                            dotClassName={item.tone === 'dirty' ? 'bg-orange-500' : undefined}
+                          />
                         ))}
                       </div>
                     </div>
