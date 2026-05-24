@@ -1,7 +1,7 @@
 import { StatusBadge } from './StatusBadge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { FolderGit2, LayoutDashboard, Wrench } from 'lucide-react'
+import { FolderGit2, LayoutDashboard, Settings, Wrench } from 'lucide-react'
 import type { ActiveTab, PlatformInfo, Status } from '@/types'
 
 interface HeaderProps {
@@ -9,9 +9,10 @@ interface HeaderProps {
   readyStatus: Status
   activeTab: ActiveTab
   onTabChange: (tab: ActiveTab) => void
+  onOpenSettings?: () => void
 }
 
-export function Header({ platformInfo, readyStatus, activeTab, onTabChange }: HeaderProps) {
+export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOpenSettings }: HeaderProps) {
   const platformLabel = platformInfo?.is_macos ? 'macOS' : '非 macOS'
   const platformStatus: Status = platformInfo?.is_macos ? 'ok' : 'error'
   const pythonLabel = platformInfo ? `Python ${platformInfo.python_version}` : 'Python 3'
@@ -81,6 +82,11 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange }: He
           </Button>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {onOpenSettings && (
+            <Button variant="outline" size="icon-sm" onClick={onOpenSettings} title="工具链设置">
+              <Settings className="size-3.5" />
+            </Button>
+          )}
           <StatusBadge status={platformStatus} label={platformLabel} />
           <StatusBadge status="ok" label={pythonLabel} />
           <StatusBadge

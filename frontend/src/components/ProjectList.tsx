@@ -1,4 +1,4 @@
-import { FolderGit2, Plus, X } from 'lucide-react'
+import { FolderGit2, Plus, Rows3, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
@@ -66,7 +66,10 @@ interface ProjectListProps {
   selectedProject: string | null
   statuses: Record<string, ProjectStatus>
   busy: boolean
+  batchUpdateCount: number
+  batchUpdateLoading: boolean
   onAdd: () => void
+  onOpenBatchUpdate: () => void
   onSelect: (path: string) => void
   onRemove: (path: string) => void
 }
@@ -81,21 +84,32 @@ export function ProjectList({
   selectedProject,
   statuses,
   busy,
+  batchUpdateCount,
+  batchUpdateLoading,
   onAdd,
+  onOpenBatchUpdate,
   onSelect,
   onRemove,
 }: ProjectListProps) {
   return (
     <aside className="rounded-2xl border border-border/40 bg-card/80 dark:bg-card/75 backdrop-blur-md text-card-foreground overflow-hidden shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-        <div className="flex flex-col gap-0.5 min-w-0">
+        <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-sm font-bold text-foreground">项目列表</span>
-          <span className="text-xs text-muted-foreground">{projects.length} 个本地项目</span>
+          <span className="text-xs text-muted-foreground">
+            {projects.length} 个本地项目 · {batchUpdateLoading ? '正在检查过期项目…' : batchUpdateCount > 0 ? `${batchUpdateCount} 个待更新` : '暂无待更新'}
+          </span>
         </div>
-        <Button variant="outline" size="sm" onClick={onAdd} disabled={busy}>
-          <Plus data-icon="inline-start" />
-          添加
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onOpenBatchUpdate} disabled={busy || batchUpdateLoading || batchUpdateCount === 0}>
+            <Rows3 data-icon="inline-start" />
+            批量更新
+          </Button>
+          <Button variant="outline" size="sm" onClick={onAdd} disabled={busy}>
+            <Plus data-icon="inline-start" />
+            添加
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="h-[26rem]">

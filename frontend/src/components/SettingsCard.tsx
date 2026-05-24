@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, RotateCcw, Save, Settings } from 'lucide-react'
+import { Loader2, RotateCcw, Save, Settings, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { AppInput } from './AppInput'
@@ -7,14 +7,16 @@ import { api } from '@/api'
 import type { ManagerSettings } from '@/types'
 
 const DEFAULT_SETTINGS: ManagerSettings = {
-  official_repo_url: 'https://github.com/mindfoldhq/trellis.git',
-  accelerated_repo_url: 'https://gh-proxy.com/https://github.com/mindfoldhq/trellis.git',
+  // 前端重置默认值要与后端 config.py 保持一致，避免加载失败时写回旧仓库源。
+  official_repo_url: 'https://github.com/beilo/Trellis.git',
+  accelerated_repo_url: 'https://xget.xi-xu.me/gh/beilo/Trellis.git',
   distribution_branch: 'custom/beilo-v0.5-rc',
 }
 
 interface SettingsCardProps {
   repoPath: string
   onSaved?: () => void
+  onClose?: () => void
 }
 
 function validateSettings(settings: ManagerSettings): string | null {
@@ -30,7 +32,7 @@ function validateSettings(settings: ManagerSettings): string | null {
   return null
 }
 
-export function SettingsCard({ repoPath, onSaved }: SettingsCardProps) {
+export function SettingsCard({ repoPath, onSaved, onClose }: SettingsCardProps) {
   const [settings, setSettings] = useState<ManagerSettings>(DEFAULT_SETTINGS)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -82,10 +84,17 @@ export function SettingsCard({ repoPath, onSaved }: SettingsCardProps) {
             <span className="text-xs text-muted-foreground">修改 URL / 分支不会自动触发 clone、update 或 build。</span>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={loadSettings} disabled={loading || saving}>
-          {loading && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
-          刷新
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={loadSettings} disabled={loading || saving}>
+            {loading && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
+            刷新
+          </Button>
+          {onClose && (
+            <Button variant="ghost" size="icon-sm" onClick={onClose} disabled={saving} title="关闭设置">
+              <X className="size-3.5" />
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="grid gap-4 pt-0">
         <div className="grid gap-1.5">
