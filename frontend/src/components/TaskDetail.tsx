@@ -282,6 +282,12 @@ function TaskContextPane({ task }: { task: TrellisTaskItem }) {
         <FileTreePanel items={tree} selectedPath={selected?.path ?? null} onSelect={setSelected} />
       </div>
       <div className="rounded-lg border bg-background p-3">
+        {/* 这里只展示当前选中文件的 `.trellis/` 相对路径，方便任务上下文定位，不参与读取逻辑。 */}
+        {selected && (
+          <div className="mb-3 border-b pb-2 text-xs text-muted-foreground break-all">
+            当前路径：.trellis/{selected.path}
+          </div>
+        )}
         {error ? (
           <div className="rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
         ) : loadingFile && !content ? (

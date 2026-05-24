@@ -171,6 +171,12 @@ export function ProjectKnowledgeBrowser({ projectPath, projectStatus }: ProjectK
       <CardContent className="grid min-h-[32rem] gap-3 pt-0 md:grid-cols-[18rem_minmax(0,1fr)]">
         <FileTreePanel items={items} selectedPath={selected?.path ?? null} onSelect={setSelected} />
         <div className="rounded-lg border bg-background p-3">
+          {/* 这里只展示当前选中文件的 `.trellis/` 相对路径，方便确认浏览位置，不参与读取逻辑。 */}
+          {selected && (
+            <div className="mb-3 border-b pb-2 text-xs text-muted-foreground break-all">
+              当前路径：.trellis/{selected.path}
+            </div>
+          )}
           {error ? (
             <div className="rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
           ) : loadingFile && !content ? (
