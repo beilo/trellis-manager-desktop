@@ -13,6 +13,10 @@
 - **项目 Git 与知识库面板**：项目页新增只读 Git 快捷面板、任务 / 知识库切换、`.trellis/spec` 与 `.trellis/workspace` 文件树浏览，并复用 Markdown / JSONL viewer。
 - **批量 Update 与工具链设置 UI**：项目页新增批量 Update 卡片，工具链页新增仓库 URL / 镜像 / 分发分支设置卡片，保存后供后续检查与下载更新使用。
 
+### Changed
+
+- **项目 Git 快捷面板**：改为项目卡片下方可折叠只读面板，并补充最近提交日期展示。
+
 ### Added
 
 - **Manager P0 UI**：新增项目健康指示、三列跨项目看板与 Cursor 打开入口。

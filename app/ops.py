@@ -66,6 +66,7 @@ class ProjectStatus:
 @dataclass(frozen=True)
 class CommitEntry:
     short_hash: str
+    date: str | None
     title: str
     oneline: str
 
@@ -214,8 +215,23 @@ def _parse_git_log_oneline(output: str) -> list[CommitEntry]:
         stripped = line.strip()
         if not stripped:
             continue
+        # 用不可见分隔符承载日期，避免提交标题里的空格影响解析。
+        if "\x1f" in stripped:
+            parts = stripped.split("\x1f", 2)
+            if len(parts) == 3:
+                short_hash, date, title = parts
+                clean_title = title.strip() or stripped
+                commits.append(
+                    CommitEntry(
+                        short_hash=short_hash,
+                        date=date.strip() or None,
+                        title=clean_title,
+                        oneline=f"{short_hash} {clean_title}",
+                    ),
+                )
+                continue
         short_hash, _, title = stripped.partition(" ")
-        commits.append(CommitEntry(short_hash=short_hash, title=title.strip() or stripped, oneline=stripped))
+        commits.append(CommitEntry(short_hash=short_hash, date=None, title=title.strip() or stripped, oneline=stripped))
     return commits
 
 
@@ -245,7 +261,7 @@ def get_project_git_summary(project_path: Path | str, runner: CommandRunner | No
     dirty, _, dirty_result = git_status_short(path, runner)
     dirty_files = _parse_git_status_short(dirty_result.stdout)
 
-    log_result = runner.run(["git", "log", "-5", "--oneline"], cwd=path, timeout=20)
+    log_result = runner.run(["git", "log", "-5", "--date=short", "--pretty=format:%h%x1f%ad%x1f%s"], cwd=path, timeout=20)
     if not log_result.ok:
         raise OperationError("读取最近提交失败。")
     recent_commits = _parse_git_log_oneline(log_result.stdout)

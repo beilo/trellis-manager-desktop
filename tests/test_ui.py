@@ -36,8 +36,8 @@ class FakeGitPreviewRunner:
             return CommandResult(normalized, cwd, 0, "", "", 1)
         if normalized[:4] == ["git", "rev-list", "--left-right", "--count"]:
             return CommandResult(normalized, cwd, 0, "0\t1\n", "", 1)
-        if normalized[:4] == ["git", "log", "-5", "--oneline"]:
-            return CommandResult(normalized, cwd, 0, "abc1234 Initial commit\n", "", 1)
+        if normalized[:5] == ["git", "log", "-5", "--date=short", "--pretty=format:%h%x1f%ad%x1f%s"]:
+            return CommandResult(normalized, cwd, 0, "abc1234\x1f2026-05-24\x1fInitial commit\n", "", 1)
         if normalized[-3:] == ["update", "--force", "--dry-run"]:
             return CommandResult(normalized, cwd, 0, "[Dry run] No changes made.\n", "", 1)
         return CommandResult(normalized, cwd, 0, "", "", 1)
@@ -306,6 +306,7 @@ class TrellisManagerUiTest(unittest.TestCase):
             self.assertEqual(summary["branch"], "feature/git-summary")
             self.assertEqual(summary["dirty_files"], [" M app.py"])
             self.assertEqual(summary["recent_commits"][0]["short_hash"], "abc1234")
+            self.assertEqual(summary["recent_commits"][0]["date"], "2026-05-24")
             self.assertTrue(preview["ok"])
             self.assertEqual(preview["trellis_version_before"], "0.6.0-beta.9")
             self.assertEqual(preview["latest_version"], "0.6.0-beta.10")
