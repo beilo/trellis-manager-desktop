@@ -16,6 +16,7 @@ from app.config import (
     DISTRIBUTION_BRANCH,
     OFFICIAL_REPO_URL,
     PATH_EXPORT_LINE,
+    append_operation_log,
 )
 from app.runner import CommandResult, CommandRunner
 from app.task_snapshot import read_task_snapshot, TrellisTaskItem, TrellisTaskSnapshot
@@ -63,6 +64,34 @@ class ProjectStatus:
 
 
 @dataclass(frozen=True)
+class CommitEntry:
+    short_hash: str
+    title: str
+    oneline: str
+
+
+@dataclass(frozen=True)
+class GitSummary:
+    branch: str | None
+    dirty: bool
+    dirty_files: list[str] = field(default_factory=list)
+    ahead: int | None = None
+    behind: int | None = None
+    recent_commits: list[CommitEntry] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class UpdatePreview:
+    ok: bool
+    message: str
+    dry_run_output: str
+    dirty_files_before: list[str] = field(default_factory=list)
+    trellis_version_before: str | None = None
+    latest_version: str | None = None
+    would_run_migrations: bool = False
+
+
+@dataclass(frozen=True)
 class ToolCommandStatus:
     name: str
     path: Path
@@ -94,6 +123,42 @@ class OperationReport:
         }
 
 
+@dataclass(frozen=True)
+class ProjectUpdateResult:
+    path: str
+    ok: bool
+    message: str
+    report: dict[str, object] | None = None
+    skipped: bool = False
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class BatchUpdateReport:
+    ok: bool
+    message: str
+    results: list[ProjectUpdateResult] = field(default_factory=list)
+    total: int = 0
+    updated_count: int = 0
+    failed_count: int = 0
+    skipped_count: int = 0
+
+    def to_log_entry(self) -> dict[str, object]:
+        return {
+            "title": "批量更新业务项目",
+            "ok": self.ok,
+            "message": self.message,
+            "details": {
+                "total": str(self.total),
+                "updated_count": str(self.updated_count),
+                "failed_count": str(self.failed_count),
+                "skipped_count": str(self.skipped_count),
+            },
+            "results": [dataclass_to_dict(result) for result in self.results],
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+        }
+
+
 class OperationError(RuntimeError):
     def __init__(self, message: str, commands: list[CommandResult] | None = None) -> None:
         super().__init__(message)
@@ -108,8 +173,8 @@ def expand_path(value: str | Path) -> Path:
     return Path(value).expanduser().resolve()
 
 
-def accelerated_clone_url() -> str:
-    return ACCELERATED_REPO_URL
+def accelerated_clone_url(accelerated_repo_url: str = ACCELERATED_REPO_URL) -> str:
+    return accelerated_repo_url
 
 
 def wrapper_path(name: str, bin_dir: Path = DEFAULT_BIN_DIR) -> Path:
@@ -128,6 +193,114 @@ def project_init_command(bin_dir: Path = DEFAULT_BIN_DIR) -> list[str]:
 
 def project_update_command(bin_dir: Path = DEFAULT_BIN_DIR) -> list[str]:
     return [str(wrapper_path("tl", bin_dir)), "update", "--force"]
+
+
+def project_update_preview_command(bin_dir: Path = DEFAULT_BIN_DIR) -> list[str]:
+    return [*project_update_command(bin_dir), "--dry-run"]
+
+
+def _parse_git_status_short(output: str) -> list[str]:
+    files: list[str] = []
+    for line in output.splitlines():
+        preserved = line.rstrip("\r")
+        if preserved:
+            files.append(preserved)
+    return files
+
+
+def _parse_git_log_oneline(output: str) -> list[CommitEntry]:
+    commits: list[CommitEntry] = []
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        short_hash, _, title = stripped.partition(" ")
+        commits.append(CommitEntry(short_hash=short_hash, title=title.strip() or stripped, oneline=stripped))
+    return commits
+
+
+def _detect_migration_signals(output: str) -> bool:
+    keywords = [
+        "Analyzing migrations",
+        "Auto-migrate",
+        "Requires confirmation",
+        "Conflict",
+        "MIGRATION REQUIRED",
+    ]
+    normalized = output.lower()
+    return any(keyword.lower() in normalized for keyword in keywords)
+
+
+def get_project_git_summary(project_path: Path | str, runner: CommandRunner | None = None) -> GitSummary:
+    runner = runner or CommandRunner()
+    path = expand_path(project_path)
+    if not path.exists() or not path.is_dir():
+        raise OperationError("业务项目目录不存在。")
+    if not is_git_repo(path, runner):
+        raise OperationError("目标项目不是 git 仓库。")
+
+    branch_result = runner.run(["git", "branch", "--show-current"], cwd=path, timeout=10)
+    branch = _successful_output(branch_result)
+
+    dirty, _, dirty_result = git_status_short(path, runner)
+    dirty_files = _parse_git_status_short(dirty_result.stdout)
+
+    log_result = runner.run(["git", "log", "-5", "--oneline"], cwd=path, timeout=20)
+    if not log_result.ok:
+        raise OperationError("读取最近提交失败。")
+    recent_commits = _parse_git_log_oneline(log_result.stdout)
+
+    # 业务项目应跟随自身 upstream，而不是 Trellis 工具仓库的分发分支。
+    ahead, behind = _read_ahead_behind(path, runner, None)
+    return GitSummary(
+        branch=branch,
+        dirty=dirty,
+        dirty_files=dirty_files,
+        ahead=ahead,
+        behind=behind,
+        recent_commits=recent_commits,
+    )
+
+
+def preview_project_update(
+    project_dir: Path | str,
+    runner: CommandRunner | None = None,
+    bin_dir: Path = DEFAULT_BIN_DIR,
+    tool_repo_dir: Path = DEFAULT_REPO_DIR,
+) -> UpdatePreview:
+    runner = runner or CommandRunner()
+    path = expand_path(project_dir)
+    if not path.exists() or not path.is_dir():
+        raise OperationError("业务项目目录不存在。")
+    if not is_git_repo(path, runner):
+        raise OperationError("目标项目必须是 git 仓库。")
+    if not (path / ".trellis").exists():
+        raise OperationError("目标项目尚未安装 Trellis，请先 init。")
+
+    _, _, dirty_result = git_status_short(path, runner)
+    dirty_files_before = _parse_git_status_short(dirty_result.stdout)
+    trellis_version_before = read_project_trellis_version(path)
+    latest_version = read_cli_version(tool_repo_dir.expanduser())
+    dry_run_result = runner.run(project_update_preview_command(bin_dir), cwd=path, timeout=300)
+    dry_run_output = "\n".join(part for part in [dry_run_result.stdout.strip(), dry_run_result.stderr.strip()] if part)
+    if not dry_run_output:
+        dry_run_output = dry_run_result.stdout or dry_run_result.stderr or ""
+    would_run_migrations = _detect_migration_signals(dry_run_output)
+    ok = dry_run_result.ok
+    if ok:
+        message = "已完成 update 预览。"
+    else:
+        detail = dry_run_result.error or dry_run_result.stderr.strip() or dry_run_result.stdout.strip() or "未知错误。"
+        message = f"update 预览失败：{detail}"
+    return UpdatePreview(
+        ok=ok,
+        message=message,
+        dry_run_output=dry_run_output,
+        dirty_files_before=dirty_files_before,
+        trellis_version_before=trellis_version_before,
+        latest_version=latest_version,
+        would_run_migrations=would_run_migrations,
+    )
 
 
 def helm_workspace_new_command(workspace_name: str, project_dir: Path) -> list[str]:
@@ -226,7 +399,8 @@ def is_git_repo(path: Path, runner: CommandRunner | None = None) -> bool:
 def git_status_short(path: Path, runner: CommandRunner | None = None) -> tuple[bool, str, CommandResult]:
     runner = runner or CommandRunner()
     result = runner.run(["git", "status", "--short"], cwd=path, timeout=20)
-    output = result.stdout.strip()
+    # git status --short 的前两列是状态位，不能用 strip() 丢掉前导空格。
+    output = result.stdout.rstrip("\r\n")
     return bool(output), output, result
 
 
@@ -288,7 +462,11 @@ def is_trellis_repo(repo_dir: Path) -> bool:
     return cli_entry_path(repo_dir).exists() and (repo_dir / "packages" / "cli" / "package.json").exists()
 
 
-def check_tool_repo(repo_dir: Path = DEFAULT_REPO_DIR, runner: CommandRunner | None = None) -> RepoStatus:
+def check_tool_repo(
+    repo_dir: Path = DEFAULT_REPO_DIR,
+    runner: CommandRunner | None = None,
+    distribution_branch: str = DISTRIBUTION_BRANCH,
+) -> RepoStatus:
     runner = runner or CommandRunner()
     repo_dir = repo_dir.expanduser()
     if not repo_dir.exists():
@@ -333,12 +511,12 @@ def check_tool_repo(repo_dir: Path = DEFAULT_REPO_DIR, runner: CommandRunner | N
         status: Status = "info"
         message = "工具仓库有本地变更（如 lock 文件），更新时会自动暂存并恢复。"
     elif valid:
-        fetch = runner.run(["git", "fetch", "origin", DISTRIBUTION_BRANCH], cwd=repo_dir, timeout=120)
+        fetch = runner.run(["git", "fetch", "origin", distribution_branch], cwd=repo_dir, timeout=120)
         if fetch.ok:
-            ahead, behind = _read_ahead_behind(repo_dir, runner)
-            if branch != DISTRIBUTION_BRANCH:
+            ahead, behind = _read_ahead_behind(repo_dir, runner, distribution_branch)
+            if branch != distribution_branch:
                 status = "warning"
-                message = f"当前分支不是团队分发分支，点击更新会切到 {DISTRIBUTION_BRANCH}。"
+                message = f"当前分支不是团队分发分支，点击更新会切到 {distribution_branch}。"
             elif behind and behind > 0:
                 status = "warning"
                 message = f"远端有 {behind} 个新提交，可以更新。"
@@ -373,6 +551,9 @@ def check_tool_repo(repo_dir: Path = DEFAULT_REPO_DIR, runner: CommandRunner | N
 def install_or_update_tool_repo(
     repo_dir: Path = DEFAULT_REPO_DIR,
     runner: CommandRunner | None = None,
+    official_repo_url: str = OFFICIAL_REPO_URL,
+    accelerated_repo_url: str = ACCELERATED_REPO_URL,
+    distribution_branch: str = DISTRIBUTION_BRANCH,
 ) -> OperationReport:
     runner = runner or CommandRunner()
     repo_dir = repo_dir.expanduser()
@@ -380,27 +561,27 @@ def install_or_update_tool_repo(
     repo_dir.parent.mkdir(parents=True, exist_ok=True)
     if not repo_dir.exists():
         clone = runner.run(
-            ["git", "clone", "--branch", DISTRIBUTION_BRANCH, accelerated_clone_url(), str(repo_dir)],
+            ["git", "clone", "--branch", distribution_branch, accelerated_clone_url(accelerated_repo_url), str(repo_dir)],
             timeout=600,
         )
         commands.append(clone)
         if not clone.ok:
             fallback = runner.run(
-                ["git", "clone", "--branch", DISTRIBUTION_BRANCH, OFFICIAL_REPO_URL, str(repo_dir)],
+                ["git", "clone", "--branch", distribution_branch, official_repo_url, str(repo_dir)],
                 timeout=600,
             )
             commands.append(fallback)
             _raise_if_failed(fallback, "下载 Trellis 工具仓库失败。", commands)
-        origin = runner.run(["git", "remote", "set-url", "origin", OFFICIAL_REPO_URL], cwd=repo_dir, timeout=30)
+        origin = runner.run(["git", "remote", "set-url", "origin", official_repo_url], cwd=repo_dir, timeout=30)
         commands.append(origin)
         _raise_if_failed(origin, "设置官方 origin 失败。", commands)
     else:
-        status = check_tool_repo(repo_dir, runner)
+        status = check_tool_repo(repo_dir, runner, distribution_branch)
         if not status.is_git or not status.is_trellis_repo:
             raise OperationError(status.message, commands)
         # 使用 --autostash 自动暂存本地变更（如 lock 文件），更新后恢复
         pull = runner.run(
-            ["git", "pull", "--autostash", "--ff-only", "origin", DISTRIBUTION_BRANCH],
+            ["git", "pull", "--autostash", "--ff-only", "origin", distribution_branch],
             cwd=repo_dir,
             timeout=120,
         )
@@ -418,7 +599,7 @@ def install_or_update_tool_repo(
         ok=True,
         message="工具仓库已准备完成。",
         commands=commands,
-        details={"repo": str(repo_dir), "branch": DISTRIBUTION_BRANCH},
+        details={"repo": str(repo_dir), "branch": distribution_branch},
     )
 
 
@@ -619,6 +800,108 @@ def update_project(
     )
 
 
+def list_outdated_projects(
+    project_paths: list[Path | str],
+    runner: CommandRunner | None = None,
+    tool_repo_dir: Path = DEFAULT_REPO_DIR,
+) -> list[ProjectStatus]:
+    runner = runner or CommandRunner()
+    outdated: list[ProjectStatus] = []
+    for project_path in project_paths:
+        status = inspect_project(str(project_path), runner, tool_repo_dir)
+        if status.version_outdated:
+            outdated.append(status)
+    return outdated
+
+
+def batch_update_projects(
+    project_paths: list[Path | str] | None,
+    configured_projects: list[Path | str],
+    allow_dirty: bool = False,
+    runner: CommandRunner | None = None,
+    bin_dir: Path = DEFAULT_BIN_DIR,
+    tool_repo_dir: Path = DEFAULT_REPO_DIR,
+    log_file: Path | None = None,
+) -> BatchUpdateReport:
+    runner = runner or CommandRunner()
+    candidates: list[Path | str]
+    if project_paths is None:
+        # 未显式指定路径时只处理已落后项目，避免批量按钮误更新全部仓库。
+        candidates = [status.path for status in list_outdated_projects(configured_projects, runner, tool_repo_dir) if status.path is not None]
+    else:
+        candidates = project_paths
+
+    results: list[ProjectUpdateResult] = []
+    for candidate in _dedupe_project_candidates(candidates):
+        path = expand_path(candidate)
+        try:
+            status = inspect_project(str(path), runner, tool_repo_dir)
+            if status.path is None:
+                results.append(ProjectUpdateResult(str(path), False, status.message, skipped=True, reason=status.message))
+                continue
+            if status.dirty and not allow_dirty:
+                message = "项目工作区有未提交变更，批量更新已跳过。"
+                results.append(ProjectUpdateResult(str(status.path), False, message, skipped=True, reason=message))
+                continue
+            report = update_project(status.path, allow_dirty=allow_dirty, runner=runner, bin_dir=bin_dir)
+            results.append(ProjectUpdateResult(str(status.path), True, report.message, report=report.to_log_entry()))
+        except OperationError as error:
+            results.append(
+                ProjectUpdateResult(
+                    str(path),
+                    False,
+                    str(error),
+                    report=_operation_error_report("更新业务项目", str(error), error.commands),
+                ),
+            )
+
+    updated_count = sum(1 for result in results if result.ok)
+    skipped_count = sum(1 for result in results if result.skipped)
+    failed_count = len(results) - updated_count - skipped_count
+    ok = len(results) > 0 and failed_count == 0 and skipped_count == 0
+    if not results:
+        message = "没有需要批量更新的项目。"
+    elif ok:
+        message = f"批量更新完成：成功 {updated_count} 个项目。"
+    else:
+        message = f"批量更新完成：成功 {updated_count} 个，失败 {failed_count} 个，跳过 {skipped_count} 个。"
+    report = BatchUpdateReport(
+        ok=ok,
+        message=message,
+        results=results,
+        total=len(results),
+        updated_count=updated_count,
+        failed_count=failed_count,
+        skipped_count=skipped_count,
+    )
+    entry = report.to_log_entry()
+    append_operation_log(entry, log_file) if log_file else append_operation_log(entry)
+    return report
+
+
+def _dedupe_project_candidates(project_paths: list[Path | str]) -> list[Path | str]:
+    seen: set[str] = set()
+    deduped: list[Path | str] = []
+    for project_path in project_paths:
+        key = str(Path(project_path).expanduser())
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(project_path)
+    return deduped
+
+
+def _operation_error_report(title: str, message: str, commands: list[CommandResult]) -> dict[str, object]:
+    return {
+        "title": title,
+        "ok": False,
+        "message": message,
+        "details": {},
+        "commands": [command.to_dict() for command in commands],
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
 def push_task_to_helm(
     project_dir: Path,
     task_dir: Path,
@@ -775,9 +1058,15 @@ def _successful_output(result: CommandResult) -> str | None:
     return value or None
 
 
-def _read_ahead_behind(repo_dir: Path, runner: CommandRunner) -> tuple[int | None, int | None]:
+def _read_ahead_behind(
+    repo_dir: Path,
+    runner: CommandRunner,
+    distribution_branch: str | None = DISTRIBUTION_BRANCH,
+) -> tuple[int | None, int | None]:
+    # 工具仓库比较固定分发分支；业务项目传 None 时比较当前分支配置的 upstream。
+    target = f"origin/{distribution_branch}" if distribution_branch else "@{upstream}"
     result = runner.run(
-        ["git", "rev-list", "--left-right", "--count", f"HEAD...origin/{DISTRIBUTION_BRANCH}"],
+        ["git", "rev-list", "--left-right", "--count", f"HEAD...{target}"],
         cwd=repo_dir,
         timeout=30,
     )
@@ -801,7 +1090,14 @@ def _raise_if_failed(result: CommandResult, message: str, commands: list[Command
 
 def dataclass_to_dict(value: object) -> dict[str, object]:
     data = asdict(value)
-    for key, item in list(data.items()):
-        if isinstance(item, Path):
-            data[key] = str(item)
-    return data
+    return _json_safe(data)  # type: ignore[return-value]
+
+
+def _json_safe(value: object) -> object:
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    return value

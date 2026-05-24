@@ -27,12 +27,39 @@ class ManagerConfig:
     projects: list[Path] = field(default_factory=list)
     last_selected_project: Path | None = None
     recent_projects: list[Path] = field(default_factory=list)
+    official_repo_url: str = OFFICIAL_REPO_URL
+    accelerated_repo_url: str = ACCELERATED_REPO_URL
+    distribution_branch: str = DISTRIBUTION_BRANCH
 
 
 def _path_from_json(value: object, fallback: Path) -> Path:
     if not isinstance(value, str) or not value.strip():
         return fallback
     return Path(value).expanduser()
+
+
+# 统一把配置字符串做最小校验：空值回退到默认值，避免旧配置把运行时引到无效仓库或分支。
+def _str_from_json(value: object, fallback: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        return fallback
+    return value.strip()
+
+
+# 只序列化已知配置字段，避免以后迁移时丢失语义或把内部结构写进 JSON。
+def _config_payload(config: ManagerConfig) -> dict[str, object]:
+    return {
+        "trellis_repo": str(config.trellis_repo.expanduser()),
+        "projects": [str(path.expanduser()) for path in _dedupe_paths(config.projects)],
+        "last_selected_project": (
+            str(config.last_selected_project.expanduser())
+            if config.last_selected_project
+            else None
+        ),
+        "recent_projects": [str(path.expanduser()) for path in _dedupe_paths(config.recent_projects)],
+        "official_repo_url": config.official_repo_url,
+        "accelerated_repo_url": config.accelerated_repo_url,
+        "distribution_branch": config.distribution_branch,
+    }
 
 
 def _dedupe_paths(paths: list[Path]) -> list[Path]:
@@ -83,6 +110,18 @@ def load_config(config_file: Path = CONFIG_FILE) -> ManagerConfig:
         data.get("trellis_repo") if isinstance(data, dict) else None,
         DEFAULT_REPO_DIR,
     )
+    official_repo_url = _str_from_json(
+        data.get("official_repo_url") if isinstance(data, dict) else None,
+        OFFICIAL_REPO_URL,
+    )
+    accelerated_repo_url = _str_from_json(
+        data.get("accelerated_repo_url") if isinstance(data, dict) else None,
+        ACCELERATED_REPO_URL,
+    )
+    distribution_branch = _str_from_json(
+        data.get("distribution_branch") if isinstance(data, dict) else None,
+        DISTRIBUTION_BRANCH,
+    )
     deduped_projects = _dedupe_paths(projects)
     project_keys = {str(path.expanduser()) for path in deduped_projects}
     if last_selected and str(last_selected.expanduser()) not in project_keys:
@@ -92,23 +131,16 @@ def load_config(config_file: Path = CONFIG_FILE) -> ManagerConfig:
         projects=deduped_projects,
         last_selected_project=last_selected,
         recent_projects=_dedupe_paths(recent),
+        official_repo_url=official_repo_url,
+        accelerated_repo_url=accelerated_repo_url,
+        distribution_branch=distribution_branch,
     )
 
 
 def save_config(config: ManagerConfig, config_file: Path = CONFIG_FILE) -> None:
     config_file.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "trellis_repo": str(config.trellis_repo.expanduser()),
-        "projects": [str(path.expanduser()) for path in _dedupe_paths(config.projects)],
-        "last_selected_project": (
-            str(config.last_selected_project.expanduser())
-            if config.last_selected_project
-            else None
-        ),
-        "recent_projects": [str(path.expanduser()) for path in _dedupe_paths(config.recent_projects)],
-    }
     config_file.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(_config_payload(config), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
 
@@ -121,6 +153,9 @@ def remember_project(project_dir: Path, config_file: Path = CONFIG_FILE) -> Mana
         projects=config.projects,
         last_selected_project=config.last_selected_project,
         recent_projects=_dedupe_paths([project_dir.expanduser(), *config.recent_projects])[:20],
+        official_repo_url=config.official_repo_url,
+        accelerated_repo_url=config.accelerated_repo_url,
+        distribution_branch=config.distribution_branch,
     )
     save_config(updated, config_file)
     return updated
@@ -142,6 +177,9 @@ def save_projects(
         projects=deduped_projects,
         last_selected_project=selected,
         recent_projects=config.recent_projects,
+        official_repo_url=config.official_repo_url,
+        accelerated_repo_url=config.accelerated_repo_url,
+        distribution_branch=config.distribution_branch,
     )
     save_config(updated, config_file)
     return updated
@@ -155,6 +193,9 @@ def add_project(project_dir: Path, config_file: Path = CONFIG_FILE) -> ManagerCo
         projects=_dedupe_paths([*config.projects, project]),
         last_selected_project=project,
         recent_projects=_dedupe_paths([project, *config.recent_projects])[:20],
+        official_repo_url=config.official_repo_url,
+        accelerated_repo_url=config.accelerated_repo_url,
+        distribution_branch=config.distribution_branch,
     )
     save_config(updated, config_file)
     return updated
@@ -172,6 +213,9 @@ def remove_project(project_dir: Path, config_file: Path = CONFIG_FILE) -> Manage
         projects=projects,
         last_selected_project=selected,
         recent_projects=config.recent_projects,
+        official_repo_url=config.official_repo_url,
+        accelerated_repo_url=config.accelerated_repo_url,
+        distribution_branch=config.distribution_branch,
     )
     save_config(updated, config_file)
     return updated
@@ -188,6 +232,34 @@ def save_selected_project(project_dir: Path | None, config_file: Path = CONFIG_F
         projects=config.projects,
         last_selected_project=selected,
         recent_projects=config.recent_projects,
+        official_repo_url=config.official_repo_url,
+        accelerated_repo_url=config.accelerated_repo_url,
+        distribution_branch=config.distribution_branch,
+    )
+    save_config(updated, config_file)
+    return updated
+
+
+def get_settings(config_file: Path = CONFIG_FILE) -> dict[str, str]:
+    config = load_config(config_file)
+    return {
+        "official_repo_url": config.official_repo_url,
+        "accelerated_repo_url": config.accelerated_repo_url,
+        "distribution_branch": config.distribution_branch,
+    }
+
+
+def save_settings(partial: dict[str, object], config_file: Path = CONFIG_FILE) -> ManagerConfig:
+    config = load_config(config_file)
+    # 只接受设置页允许修改的字段，缺失项保留当前值，空字符串回退默认值。
+    updated = ManagerConfig(
+        trellis_repo=config.trellis_repo,
+        projects=config.projects,
+        last_selected_project=config.last_selected_project,
+        recent_projects=config.recent_projects,
+        official_repo_url=_str_from_json(partial.get("official_repo_url"), config.official_repo_url),
+        accelerated_repo_url=_str_from_json(partial.get("accelerated_repo_url"), config.accelerated_repo_url),
+        distribution_branch=_str_from_json(partial.get("distribution_branch"), config.distribution_branch),
     )
     save_config(updated, config_file)
     return updated

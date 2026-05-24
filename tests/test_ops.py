@@ -12,14 +12,18 @@ sys.path.insert(0, str(ROOT))
 
 import launcher  # noqa: E402
 from app.config import (  # noqa: E402
+    ACCELERATED_REPO_URL,
+    DISTRIBUTION_BRANCH,
     OFFICIAL_REPO_URL,
     PATH_EXPORT_LINE,
     ManagerConfig,
     add_project,
+    get_settings,
     load_config,
     remove_project,
     save_config,
     save_projects,
+    save_settings,
 )
 from app.ops import (  # noqa: E402
     OperationError,
@@ -28,10 +32,16 @@ from app.ops import (  # noqa: E402
     check_tool_repo,
     ensure_wrappers_and_path,
     ensure_zshrc_path,
+    get_project_git_summary,
     inspect_project,
     init_project,
+    install_or_update_tool_repo,
+    list_outdated_projects,
+    batch_update_projects,
+    preview_project_update,
     project_init_command,
     project_update_command,
+    project_update_preview_command,
     push_task_to_helm,
     update_project,
 )
@@ -51,9 +61,17 @@ class FakeRunner:
         if normalized[:3] == ["git", "status", "--short"]:
             return self._result(normalized, cwd, " M app.py\n")
         if normalized[:3] == ["git", "branch", "--show-current"]:
-            return self._result(normalized, cwd, "custom/beilo-v0.5-rc\n")
+            return self._result(normalized, cwd, f"{DISTRIBUTION_BRANCH}\n")
         if normalized[:4] == ["git", "remote", "get-url", "origin"]:
             return self._result(normalized, cwd, f"{OFFICIAL_REPO_URL}\n")
+        if normalized[:4] == ["git", "log", "-5", "--oneline"]:
+            return self._result(normalized, cwd, "abc1234 Initial commit\ndef5678 Add feature\n")
+        if normalized[:4] == ["git", "fetch", "origin", DISTRIBUTION_BRANCH]:
+            return self._result(normalized, cwd, "")
+        if normalized[:4] == ["git", "rev-list", "--left-right", "--count"]:
+            return self._result(normalized, cwd, "1\t2\n")
+        if normalized[-3:] == ["update", "--force", "--dry-run"]:
+            return self._result(normalized, cwd, "Analyzing migrations...\n[Dry run] No changes made.\n")
         if normalized[-2:] == ["update", "--force"]:
             return self._result(normalized, cwd, "updated\n")
         if normalized[:3] == ["git", "diff", "--stat"]:
@@ -75,6 +93,41 @@ class CleanRunner(FakeRunner):
         if normalized[:4] == ["git", "rev-list", "--left-right", "--count"]:
             return self._result(normalized, cwd, "0\t2\n")
         return super().run(command, cwd, timeout)
+
+
+class BatchUpdateRunner:
+    def __init__(self, behaviors: dict[str, dict[str, object]]) -> None:
+        self.behaviors = behaviors
+        self.calls: list[tuple[list[str], Path | None]] = []
+
+    def run(self, command: list[str | Path], cwd: Path | None = None, timeout: int = 60) -> CommandResult:
+        normalized = [str(part) for part in command]
+        self.calls.append((normalized, cwd))
+        behavior = self.behaviors.get(str(cwd) if cwd else "", {})
+        if normalized[:3] == ["git", "rev-parse", "--is-inside-work-tree"]:
+            return self._result(normalized, cwd, "true\n")
+        if normalized[:3] == ["git", "status", "--short"]:
+            return self._result(normalized, cwd, " M app.py\n" if behavior.get("dirty") else "")
+        if normalized[:3] == ["git", "diff", "--stat"]:
+            return self._result(normalized, cwd, "")
+        if normalized[-2:] == ["update", "--force"]:
+            if behavior.get("update_fail"):
+                return CommandResult(normalized, cwd, 1, "", "update failed", 1)
+            return self._result(normalized, cwd, "updated\n")
+        return self._result(normalized, cwd, "")
+
+    def _result(self, command: list[str], cwd: Path | None, stdout: str) -> CommandResult:
+        return CommandResult(command, cwd, 0, stdout, "", 1)
+
+
+class ToolRepoInstallRunner:
+    def __init__(self) -> None:
+        self.calls: list[tuple[list[str], Path | None]] = []
+
+    def run(self, command: list[str | Path], cwd: Path | None = None, timeout: int = 60) -> CommandResult:
+        normalized = [str(part) for part in command]
+        self.calls.append((normalized, cwd))
+        return CommandResult(normalized, cwd, 0, "", "", 1)
 
 
 class HelmRunner:
@@ -134,7 +187,130 @@ class TrellisManagerOpsTest(unittest.TestCase):
 
             self.assertEqual(project_init_command(bin_dir), [str(bin_dir / "tl"), "init", "-y"])
             self.assertEqual(project_update_command(bin_dir), [str(bin_dir / "tl"), "update", "--force"])
+            self.assertEqual(project_update_preview_command(bin_dir), [str(bin_dir / "tl"), "update", "--force", "--dry-run"])
             self.assertEqual(accelerated_clone_url(), "https://xget.xi-xu.me/gh/beilo/Trellis.git")
+
+    def test_project_git_summary_returns_dirty_files_and_commits(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            runner = FakeRunner()
+
+            summary = get_project_git_summary(project, runner)  # type: ignore[arg-type]
+
+            self.assertEqual(summary.branch, DISTRIBUTION_BRANCH)
+            self.assertTrue(summary.dirty)
+            self.assertEqual(summary.dirty_files, [" M app.py"])
+            self.assertEqual(summary.ahead, 1)
+            self.assertEqual(summary.behind, 2)
+            self.assertIn(["git", "rev-list", "--left-right", "--count", "HEAD...@{upstream}"], [call[0] for call in runner.calls])
+            self.assertEqual(summary.recent_commits[0].short_hash, "abc1234")
+            self.assertEqual(summary.recent_commits[0].title, "Initial commit")
+
+    def test_project_git_summary_clean_project_has_empty_dirty_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            runner = CleanRunner()
+
+            summary = get_project_git_summary(project, runner)  # type: ignore[arg-type]
+
+            self.assertFalse(summary.dirty)
+            self.assertEqual(summary.dirty_files, [])
+            self.assertEqual(summary.behind, 2)
+            self.assertIn(["git", "rev-list", "--left-right", "--count", "HEAD...@{upstream}"], [call[0] for call in runner.calls])
+
+    def test_project_git_summary_rejects_non_git_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            runner = FakeRunner()
+            runner.run = lambda command, cwd=None, timeout=60: CommandResult(  # type: ignore[method-assign]
+                [str(part) for part in command],
+                cwd,
+                1,
+                "",
+                "not git",
+                1,
+            )
+
+            with self.assertRaises(OperationError) as error:
+                get_project_git_summary(project, runner)  # type: ignore[arg-type]
+
+            self.assertIn("不是 git 仓库", str(error.exception))
+
+    def test_preview_project_update_runs_dry_run_without_real_update(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "project"
+            tool_repo = root / "tool"
+            bin_dir = root / "bin"
+            project.mkdir()
+            (project / ".trellis").mkdir()
+            (project / ".trellis" / ".version").write_text("0.6.0-beta.9", encoding="utf-8")
+            package = tool_repo / "packages" / "cli" / "package.json"
+            package.parent.mkdir(parents=True)
+            package.write_text(json.dumps({"version": "0.6.0-beta.10"}), encoding="utf-8")
+            runner = FakeRunner()
+
+            preview = preview_project_update(project, runner, bin_dir, tool_repo)  # type: ignore[arg-type]
+
+            self.assertTrue(preview.ok)
+            self.assertEqual(preview.dirty_files_before, [" M app.py"])
+            self.assertEqual(preview.trellis_version_before, "0.6.0-beta.9")
+            self.assertEqual(preview.latest_version, "0.6.0-beta.10")
+            self.assertTrue(preview.would_run_migrations)
+            self.assertIn("[Dry run] No changes made.", preview.dry_run_output)
+            calls = [call[0] for call in runner.calls]
+            self.assertIn([str(bin_dir / "tl"), "update", "--force", "--dry-run"], calls)
+            self.assertNotIn([str(bin_dir / "tl"), "update", "--force"], calls)
+
+    def test_preview_project_update_failure_preserves_output(self) -> None:
+        class FailingPreviewRunner(FakeRunner):
+            def run(self, command: list[str | Path], cwd: Path | None = None, timeout: int = 60) -> CommandResult:
+                normalized = [str(part) for part in command]
+                self.calls.append((normalized, cwd))
+                if normalized[-3:] == ["update", "--force", "--dry-run"]:
+                    return CommandResult(normalized, cwd, 1, "Cannot update\n", "version is older\n", 1)
+                return super().run(command, cwd, timeout)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            tool_repo = Path(tmp) / "tool"
+            project.mkdir()
+            (project / ".trellis").mkdir()
+            runner = FailingPreviewRunner()
+
+            preview = preview_project_update(project, runner, Path(tmp) / "bin", tool_repo)  # type: ignore[arg-type]
+
+            self.assertFalse(preview.ok)
+            self.assertIn("update 预览失败", preview.message)
+            self.assertIn("Cannot update", preview.dry_run_output)
+            self.assertIn("version is older", preview.dry_run_output)
+
+    def test_preview_project_update_rejects_non_git_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            runner = FakeRunner()
+            runner.run = lambda command, cwd=None, timeout=60: CommandResult(  # type: ignore[method-assign]
+                [str(part) for part in command],
+                cwd,
+                1,
+                "",
+                "not git",
+                1,
+            )
+
+            with self.assertRaises(OperationError) as error:
+                preview_project_update(project, runner)  # type: ignore[arg-type]
+
+            self.assertIn("必须是 git 仓库", str(error.exception))
+
+    def test_preview_project_update_rejects_missing_trellis(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+
+            with self.assertRaises(OperationError) as error:
+                preview_project_update(project, FakeRunner())  # type: ignore[arg-type]
+
+            self.assertIn("尚未安装 Trellis", str(error.exception))
 
     def test_project_init_runs_init_then_force_update(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -339,6 +515,135 @@ class TrellisManagerOpsTest(unittest.TestCase):
             self.assertFalse(status.is_git)
             self.assertEqual(status.status, "error")
 
+    def test_list_outdated_projects_filters_configured_projects(self) -> None:
+        """未指定 paths 时，批量入口只应选择版本落后的已配置项目。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            outdated = root / "outdated"
+            current = root / "current"
+            tool_repo = root / "tool"
+            for project, version in [(outdated, "0.6.0-beta.9"), (current, "0.6.0-beta.10")]:
+                project.mkdir()
+                (project / ".trellis").mkdir()
+                (project / ".trellis" / ".version").write_text(version, encoding="utf-8")
+            package = tool_repo / "packages" / "cli" / "package.json"
+            package.parent.mkdir(parents=True)
+            package.write_text(json.dumps({"version": "0.6.0-beta.10"}), encoding="utf-8")
+
+            statuses = list_outdated_projects([outdated, current], BatchUpdateRunner({}), tool_repo)  # type: ignore[arg-type]
+
+            self.assertEqual([status.path for status in statuses], [outdated.resolve()])
+
+    def test_batch_update_projects_collects_results_and_writes_one_log(self) -> None:
+        """批量更新应逐项目返回结果，并只写一条聚合操作日志。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = root / "first"
+            second = root / "second"
+            tool_repo = root / "tool"
+            log_file = root / "logs.json"
+            bin_dir = root / "bin"
+            for project in [first, second]:
+                project.mkdir()
+                (project / ".trellis").mkdir()
+                (project / ".trellis" / ".version").write_text("0.6.0-beta.9", encoding="utf-8")
+            package = tool_repo / "packages" / "cli" / "package.json"
+            package.parent.mkdir(parents=True)
+            package.write_text(json.dumps({"version": "0.6.0-beta.10"}), encoding="utf-8")
+            runner = BatchUpdateRunner({})
+
+            report = batch_update_projects([str(first), str(second), str(first)], [], runner=runner, bin_dir=bin_dir, tool_repo_dir=tool_repo, log_file=log_file)  # type: ignore[arg-type]
+
+            self.assertTrue(report.ok)
+            self.assertEqual(report.total, 2)
+            self.assertEqual(report.updated_count, 2)
+            self.assertEqual([result.path for result in report.results], [str(first.resolve()), str(second.resolve())])
+            self.assertEqual(
+                [call[0] for call in runner.calls if call[0][:1] == [str(bin_dir / "tl")]],
+                [[str(bin_dir / "tl"), "update", "--force"], [str(bin_dir / "tl"), "update", "--force"]],
+            )
+            logs = json.loads(log_file.read_text(encoding="utf-8"))
+            self.assertEqual(len(logs), 1)
+            self.assertEqual(logs[0]["details"]["updated_count"], "2")
+            self.assertEqual(len(logs[0]["results"]), 2)
+
+    def test_batch_update_projects_defaults_to_outdated_projects_only(self) -> None:
+        """paths 为 None 时只更新落后项目，避免批量按钮误触当前项目。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            outdated = root / "outdated"
+            current = root / "current"
+            tool_repo = root / "tool"
+            bin_dir = root / "bin"
+            for project, version in [(outdated, "0.6.0-beta.9"), (current, "0.6.0-beta.10")]:
+                project.mkdir()
+                (project / ".trellis").mkdir()
+                (project / ".trellis" / ".version").write_text(version, encoding="utf-8")
+            package = tool_repo / "packages" / "cli" / "package.json"
+            package.parent.mkdir(parents=True)
+            package.write_text(json.dumps({"version": "0.6.0-beta.10"}), encoding="utf-8")
+            runner = BatchUpdateRunner({})
+
+            report = batch_update_projects(None, [outdated, current], runner=runner, bin_dir=bin_dir, tool_repo_dir=tool_repo, log_file=root / "logs.json")  # type: ignore[arg-type]
+
+            self.assertEqual(report.total, 1)
+            self.assertEqual(report.results[0].path, str(outdated.resolve()))
+            self.assertEqual(
+                [call[1] for call in runner.calls if call[0][:1] == [str(bin_dir / "tl")]],
+                [outdated.resolve()],
+            )
+
+    def test_batch_update_projects_skips_dirty_by_default(self) -> None:
+        """dirty 项目默认转成跳过结果，避免批量更新覆盖未提交工作。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dirty = root / "dirty"
+            tool_repo = root / "tool"
+            dirty.mkdir()
+            (dirty / ".trellis").mkdir()
+            (dirty / ".trellis" / ".version").write_text("0.6.0-beta.9", encoding="utf-8")
+            package = tool_repo / "packages" / "cli" / "package.json"
+            package.parent.mkdir(parents=True)
+            package.write_text(json.dumps({"version": "0.6.0-beta.10"}), encoding="utf-8")
+            runner = BatchUpdateRunner({str(dirty.resolve()): {"dirty": True}})
+
+            report = batch_update_projects([dirty], [], runner=runner, tool_repo_dir=tool_repo, log_file=root / "logs.json")  # type: ignore[arg-type]
+
+            self.assertFalse(report.ok)
+            self.assertEqual(report.skipped_count, 1)
+            self.assertTrue(report.results[0].skipped)
+            self.assertIn("未提交变更", report.results[0].reason or "")
+            self.assertNotIn([str(Path.home() / ".beilo-trellis" / "bin" / "tl"), "update", "--force"], [call[0] for call in runner.calls])
+
+    def test_batch_update_projects_continues_after_single_failure(self) -> None:
+        """单个项目 update 失败不应阻断后续项目。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            failing = root / "failing"
+            ok_project = root / "ok"
+            tool_repo = root / "tool"
+            bin_dir = root / "bin"
+            for project in [failing, ok_project]:
+                project.mkdir()
+                (project / ".trellis").mkdir()
+                (project / ".trellis" / ".version").write_text("0.6.0-beta.9", encoding="utf-8")
+            package = tool_repo / "packages" / "cli" / "package.json"
+            package.parent.mkdir(parents=True)
+            package.write_text(json.dumps({"version": "0.6.0-beta.10"}), encoding="utf-8")
+            runner = BatchUpdateRunner({str(failing.resolve()): {"update_fail": True}})
+
+            report = batch_update_projects([failing, ok_project], [], runner=runner, bin_dir=bin_dir, tool_repo_dir=tool_repo, log_file=root / "logs.json")  # type: ignore[arg-type]
+
+            self.assertFalse(report.ok)
+            self.assertEqual(report.failed_count, 1)
+            self.assertEqual(report.updated_count, 1)
+            self.assertIn("项目 update 失败", report.results[0].message)
+            self.assertTrue(report.results[1].ok)
+            self.assertEqual(
+                [call[1] for call in runner.calls if call[0][:1] == [str(bin_dir / "tl")]],
+                [failing.resolve(), ok_project.resolve()],
+            )
+
     def test_push_task_to_helm_requires_prd(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project, task = self._make_task(Path(tmp), with_prd=False)
@@ -403,6 +708,87 @@ class TrellisManagerOpsTest(unittest.TestCase):
             self.assertTrue(report.ok)
             self.assertEqual(runner.workspace_calls, 2)
             self.assertIn(["helm", "daemon", "start"], [call[0] for call in runner.calls])
+
+    def test_tool_repo_check_uses_custom_distribution_branch(self) -> None:
+        """工具仓库检查应使用配置里的分发分支而不是硬编码值。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "packages" / "cli" / "bin").mkdir(parents=True)
+            (repo / "packages" / "cli" / "bin" / "trellis.js").write_text("#!/usr/bin/env node\n", encoding="utf-8")
+            (repo / "packages" / "cli" / "package.json").write_text(json.dumps({"version": "0.1.0"}), encoding="utf-8")
+            runner = CleanRunner()
+
+            status = check_tool_repo(repo, runner, "release/custom")
+
+            self.assertIn(["git", "fetch", "origin", "release/custom"], [call[0] for call in runner.calls])
+            self.assertEqual(status.behind, 2)
+            self.assertEqual(status.status, "warning")
+
+    def test_tool_repo_install_uses_configured_sources(self) -> None:
+        """安装工具仓库时应透传设置页里的仓库源与分发分支。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "Trellis"
+            runner = ToolRepoInstallRunner()
+
+            report = install_or_update_tool_repo(
+                repo,
+                runner,
+                official_repo_url="https://example.com/official.git",
+                accelerated_repo_url="https://example.com/mirror.git",
+                distribution_branch="release/custom",
+            )
+
+            self.assertTrue(report.ok)
+            self.assertEqual(report.details["branch"], "release/custom")
+            self.assertIn(
+                ["git", "clone", "--branch", "release/custom", "https://example.com/mirror.git", str(repo)],
+                [call[0] for call in runner.calls],
+            )
+            self.assertIn(
+                ["git", "remote", "set-url", "origin", "https://example.com/official.git"],
+                [call[0] for call in runner.calls],
+            )
+            self.assertIn(["pnpm", "install"], [call[0] for call in runner.calls])
+
+    def test_settings_roundtrip_persists_repo_sources_and_branch(self) -> None:
+        """设置读写应保留新字段，并允许局部更新不丢失现有值。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            config_file = Path(tmp) / "config.json"
+            repo = Path(tmp) / "Trellis"
+            first = Path(tmp) / "a"
+            save_config(
+                ManagerConfig(
+                    trellis_repo=repo,
+                    projects=[first],
+                    official_repo_url="https://example.com/official.git",
+                    accelerated_repo_url="https://example.com/mirror.git",
+                    distribution_branch="release/one",
+                ),
+                config_file,
+            )
+
+            self.assertEqual(
+                get_settings(config_file),
+                {
+                    "official_repo_url": "https://example.com/official.git",
+                    "accelerated_repo_url": "https://example.com/mirror.git",
+                    "distribution_branch": "release/one",
+                },
+            )
+
+            updated = save_settings(
+                {
+                    "official_repo_url": "https://example.com/official-2.git",
+                    "accelerated_repo_url": "",
+                    "distribution_branch": "release/two",
+                },
+                config_file,
+            )
+
+            self.assertEqual(updated.official_repo_url, "https://example.com/official-2.git")
+            self.assertEqual(updated.accelerated_repo_url, "https://example.com/mirror.git")
+            self.assertEqual(updated.distribution_branch, "release/two")
+            self.assertEqual(load_config(config_file).official_repo_url, "https://example.com/official-2.git")
 
     def test_config_persistence_dedupes_recent_projects(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
