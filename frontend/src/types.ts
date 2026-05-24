@@ -63,6 +63,8 @@ export interface AllTasksSnapshot {
   project_count: number
 }
 
+export type ProjectTaskCounts = Record<string, Record<string, number>>
+
 export interface EnvironmentItem {
   name: string
   ok: boolean

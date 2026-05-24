@@ -21,6 +21,7 @@ import { api } from './api'
 import { installRefreshCoordinator, useRefreshSubscription } from './refreshCoordinator'
 import type {
   ActiveTab,
+  AllTasksSnapshot,
   EnvironmentItem,
   LogEntry,
   LogLevel,
@@ -28,6 +29,7 @@ import type {
   OperationReport,
   PlatformInfo,
   ProjectStatus,
+  ProjectTaskCounts,
   RepoStatus,
   Status,
   ToolCommandStatus,
@@ -90,6 +92,12 @@ function projectName(path: string): string {
   return normalized.split(/[\\/]/).pop() || normalized
 }
 
+function projectTaskCountsFromSnapshot(snapshot: AllTasksSnapshot): ProjectTaskCounts {
+  return Object.fromEntries(
+    snapshot.projects.map((project) => [project.project_path, project.counts]),
+  )
+}
+
 export default function App() {
   const [platformInfo, setPlatformInfo] = useState<PlatformInfo | null>(null)
   const [activeTab, setActiveTab] = useState<ActiveTab>(getInitialTab)
@@ -133,6 +141,8 @@ export default function App() {
   const [projectPane, setProjectPane] = useState<ProjectPane>('tasks')
   const [highlightTaskPath, setHighlightTaskPath] = useState<string | null>(null)
   const [projectStatuses, setProjectStatuses] = useState<Record<string, ProjectStatus>>({})
+  const [projectTaskCounts, setProjectTaskCounts] = useState<ProjectTaskCounts>({})
+  const [projectTaskCountsLoading, setProjectTaskCountsLoading] = useState(false)
   const [projectLoading, setProjectLoading] = useState(false)
   const [projectBusy, setProjectBusy] = useState(false)
   const [allowDirty, setAllowDirty] = useState(false)
@@ -369,13 +379,38 @@ export default function App() {
     }
   }, [addLog])
 
+  const refreshProjectTaskCounts = useCallback(async (knownProjects: string[] = projects) => {
+    if (knownProjects.length === 0) {
+      setProjectTaskCounts({})
+      return
+    }
+
+    setProjectTaskCountsLoading(true)
+    try {
+      const snapshot = await api.listAllTasks()
+      // 统一从跨项目快照生成左侧计数，避免列表和看板出现两套统计口径。
+      setProjectTaskCounts(projectTaskCountsFromSnapshot(snapshot))
+    } catch (err) {
+      addLog('error', `刷新项目任务计数失败：${err}`)
+    } finally {
+      setProjectTaskCountsLoading(false)
+    }
+  }, [addLog, projects])
+
   useRefreshSubscription('project', ({ event }) => {
     if (event.type !== 'version') return
-    if (!selectedProject || event.projectPath !== selectedProject) return
+    if (!projects.includes(event.projectPath) && !projectStatuses[event.projectPath]) return
 
-    void inspectProjectInner(selectedProject, true).catch((err: unknown) => {
+    void inspectProjectInner(event.projectPath, true).catch((err: unknown) => {
       addLog('error', `自动刷新项目状态失败：${err}`)
     })
+  })
+
+  useRefreshSubscription('tasks', ({ event }) => {
+    if (event.type !== 'tasks') return
+    if (!projects.includes(event.projectPath)) return
+
+    void refreshProjectTaskCounts(projects)
   })
 
   const handleTabChange = useCallback((tab: ActiveTab) => {
@@ -419,13 +454,14 @@ export default function App() {
       setSelectedProject(path)
       setProjectStatuses((prev) => ({ ...prev, [path]: status }))
       await api.saveSelectedProject(path)
+      await refreshProjectTaskCounts(nextProjects)
       addLog('success', `完成：添加业务项目 - ${status.status}：${status.message}`)
     } catch (err) {
       addLog('error', `失败：添加业务项目 - ${err}`)
     } finally {
       setProjectBusy(false)
     }
-  }, [projects, addLog])
+  }, [projects, addLog, refreshProjectTaskCounts])
 
   const handleRemoveProject = useCallback(async (path: string) => {
     setProjectBusy(true)
@@ -441,17 +477,23 @@ export default function App() {
         delete rest[path]
         return rest
       })
+      setProjectTaskCounts((prev) => {
+        const rest = { ...prev }
+        delete rest[path]
+        return rest
+      })
       await api.saveSelectedProject(nextSelected)
       if (nextSelected && !projectStatuses[nextSelected]) {
         await inspectProjectInner(nextSelected, true)
       }
+      await refreshProjectTaskCounts(nextProjects)
       addLog('success', `完成：移除业务项目 - ${path}`)
     } catch (err) {
       addLog('error', `失败：移除业务项目 - ${err}`)
     } finally {
       setProjectBusy(false)
     }
-  }, [projects, selectedProject, projectStatuses, addLog, inspectProjectInner])
+  }, [projects, selectedProject, projectStatuses, addLog, inspectProjectInner, refreshProjectTaskCounts])
 
   const handleSelectProject = useCallback(async (path: string) => {
     setSelectedProject(path)
@@ -588,6 +630,7 @@ export default function App() {
           checkCommandsInner(),
           checkCursorInner(),
           initialProjects.length > 0 ? inspectProjectsInner(initialProjects) : Promise.resolve(),
+          initialProjects.length > 0 ? refreshProjectTaskCounts(initialProjects) : Promise.resolve(),
         ]
         await Promise.allSettled(startupChecks)
         setLogAutoOpenEnabled(true)
@@ -678,6 +721,8 @@ export default function App() {
               projects={projects}
               selectedProject={selectedProject}
               statuses={projectStatuses}
+              taskCounts={projectTaskCounts}
+              taskCountsLoading={projectTaskCountsLoading}
               busy={projectBusy}
               onAdd={handleAddProject}
               onSelect={handleSelectProject}
@@ -717,6 +762,7 @@ export default function App() {
                 onCompleted={() => {
                   addLog('info', '批量 Update 已结束，正在刷新项目状态。')
                   void inspectProjectsInner(projects)
+                  void refreshProjectTaskCounts(projects)
                 }}
               />
 
