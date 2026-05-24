@@ -1,10 +1,10 @@
-import { Loader2, FolderOpen } from 'lucide-react'
+import { Loader2, FolderOpen, SquareArrowOutUpRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { StatusBadge } from './StatusBadge'
 import { StepBadge, type StepStatus } from './StepBadge'
-import type { ProjectStatus } from '@/types'
+import type { EnvironmentItem, ProjectStatus } from '@/types'
 
 interface ProjectCardProps {
   projectPath: string | null
@@ -16,6 +16,9 @@ interface ProjectCardProps {
   onInit: () => void
   onUpdate: () => void
   onOpenDir: () => void
+  onOpenCursor: () => Promise<void>
+  cursorStatus: EnvironmentItem | null
+  cursorLoading: boolean
   onAllowDirtyChange: (v: boolean) => void
 }
 
@@ -29,9 +32,17 @@ export function ProjectCard({
   onInit,
   onUpdate,
   onOpenDir,
+  onOpenCursor,
+  cursorStatus,
+  cursorLoading,
   onAllowDirtyChange,
 }: ProjectCardProps) {
   const projectStatus = status?.status ?? 'unknown'
+  const cursorDisabledReason = cursorLoading
+    ? '正在检查 Cursor'
+    : cursorStatus && !cursorStatus.ok
+      ? cursorStatus.message
+      : null
 
   let stepStatus: StepStatus = 'idle'
   if (busy || loading) {
@@ -78,6 +89,20 @@ export function ProjectCard({
           <Button variant="outline" size="sm" onClick={onOpenDir} disabled={!projectPath}>
             <FolderOpen className="size-3" data-icon="inline-start" />
             打开目录
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void onOpenCursor()}
+            disabled={!projectPath || cursorLoading || !cursorStatus?.ok}
+            title={!projectPath ? '请先选择项目' : cursorDisabledReason ?? '在 Cursor 中打开当前项目'}
+          >
+            {cursorLoading ? (
+              <Loader2 className="size-3 animate-spin" data-icon="inline-start" />
+            ) : (
+              <SquareArrowOutUpRight className="size-3" data-icon="inline-start" />
+            )}
+            在 Cursor 中打开
           </Button>
         </div>
       </CardHeader>

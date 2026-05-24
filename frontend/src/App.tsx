@@ -7,11 +7,18 @@ import { EnvironmentCard } from './components/EnvironmentCard'
 import { RepoCard } from './components/RepoCard'
 import { CommandCard } from './components/CommandCard'
 import { ProjectCard } from './components/ProjectCard'
+import { ProjectGitPanel } from './components/ProjectGitPanel'
 import { ProjectList } from './components/ProjectList'
+import { ProjectKnowledgeBrowser } from './components/ProjectKnowledgeBrowser'
 import { LogPanel } from './components/LogPanel'
 import { TaskManagerPanel } from './components/TaskManagerPanel'
 import { KanbanPanel } from './components/KanbanPanel'
+import { UpdatePreviewDialog } from './components/UpdatePreviewDialog'
+import { BatchUpdateCard } from './components/BatchUpdateCard'
+import { SettingsCard } from './components/SettingsCard'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs'
 import { api } from './api'
+import { installRefreshCoordinator, useRefreshSubscription } from './refreshCoordinator'
 import type {
   ActiveTab,
   EnvironmentItem,
@@ -24,9 +31,11 @@ import type {
   RepoStatus,
   Status,
   ToolCommandStatus,
+  UpdatePreview,
 } from './types'
 
 const LAST_TAB_KEY = 'trellis-manager:last-active-tab'
+type ProjectPane = 'tasks' | 'knowledge'
 
 let logIdSeq = 0
 function mkLog(level: LogLevel, text: string): LogEntry {
@@ -114,14 +123,22 @@ export default function App() {
   const [cmdItems, setCmdItems] = useState<ToolCommandStatus[]>([])
   const [cmdLoading, setCmdLoading] = useState(false)
 
+  // Cursor 入口状态独立检查，避免编辑器不可用影响项目检查流程。
+  const [cursorStatus, setCursorStatus] = useState<EnvironmentItem | null>(null)
+  const [cursorLoading, setCursorLoading] = useState(false)
+
   // 多项目状态
   const [projects, setProjects] = useState<string[]>([])
   const [selectedProject, setSelectedProject] = useState<string | null>(null)
+  const [projectPane, setProjectPane] = useState<ProjectPane>('tasks')
   const [highlightTaskPath, setHighlightTaskPath] = useState<string | null>(null)
   const [projectStatuses, setProjectStatuses] = useState<Record<string, ProjectStatus>>({})
   const [projectLoading, setProjectLoading] = useState(false)
   const [projectBusy, setProjectBusy] = useState(false)
   const [allowDirty, setAllowDirty] = useState(false)
+  const [updatePreview, setUpdatePreview] = useState<UpdatePreview | null>(null)
+  const [updatePreviewOpen, setUpdatePreviewOpen] = useState(false)
+  const [updatePreviewBusy, setUpdatePreviewBusy] = useState(false)
 
   // 操作日志
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
@@ -274,6 +291,28 @@ export default function App() {
     }
   }, [addLog])
 
+  const checkCursorInner = useCallback(async () => {
+    setCursorLoading(true)
+    addLog('task', '== 检查 Cursor 入口 ==')
+    try {
+      const status = await api.checkCursorStatus()
+      setCursorStatus(status)
+      addLog('success', `完成：检查 Cursor 入口 - ${status.ok ? '可用' : '不可用'}：${status.message}`)
+    } catch (err) {
+      const fallback: EnvironmentItem = {
+        name: 'cursor',
+        ok: false,
+        status: 'error',
+        message: `检查 Cursor 入口失败：${err}`,
+        version: null,
+      }
+      setCursorStatus(fallback)
+      addLog('error', fallback.message)
+    } finally {
+      setCursorLoading(false)
+    }
+  }, [addLog])
+
   const handleCreateWrappers = useCallback(async () => {
     setRepoBusy(true)
     addLog('task', '== 创建命令入口 ==')
@@ -330,6 +369,15 @@ export default function App() {
     }
   }, [addLog])
 
+  useRefreshSubscription('project', ({ event }) => {
+    if (event.type !== 'version') return
+    if (!selectedProject || event.projectPath !== selectedProject) return
+
+    void inspectProjectInner(selectedProject, true).catch((err: unknown) => {
+      addLog('error', `自动刷新项目状态失败：${err}`)
+    })
+  })
+
   const handleTabChange = useCallback((tab: ActiveTab) => {
     setActiveTab(tab)
     window.localStorage.setItem(LAST_TAB_KEY, tab)
@@ -338,6 +386,7 @@ export default function App() {
   const handleNavigateToTask = useCallback(async (projectPath: string, taskPath: string) => {
     // 看板点击后复用项目 Tab 的 TaskDetail，避免在看板内重复实现任务操作。
     setSelectedProject(projectPath)
+    setProjectPane('tasks')
     setHighlightTaskPath(taskPath)
     handleTabChange('projects')
     await api.saveSelectedProject(projectPath)
@@ -430,27 +479,48 @@ export default function App() {
   const handleUpdateProject = useCallback(async () => {
     if (!selectedProject) return
 
-    if (selectedProjectStatus?.dirty && !allowDirty) {
-      const confirmed = window.confirm('项目有未提交变更，继续执行 tl update --force？')
-      if (!confirmed) return
+    setProjectBusy(true)
+    addLog('task', '== 预览业务项目 Update ==')
+    try {
+      const preview = await api.previewProjectUpdate(selectedProject)
+      setUpdatePreview(preview)
+      setUpdatePreviewOpen(true)
+      addLog(preview.ok ? 'info' : 'error', `Update 预览：${preview.message}`)
+    } catch (err) {
+      addLog('error', `失败：预览业务项目 Update - ${err}`)
+    } finally {
+      setProjectBusy(false)
     }
+  }, [selectedProject, addLog])
 
+  const handleCancelUpdatePreview = useCallback(() => {
+    if (updatePreviewBusy) return
+    setUpdatePreviewOpen(false)
+  }, [updatePreviewBusy])
+
+  const handleConfirmUpdatePreview = useCallback(async (confirmedAllowDirty: boolean) => {
+    if (!selectedProject) return
+
+    setUpdatePreviewBusy(true)
     setProjectBusy(true)
     addLog('task', '== 更新业务项目 ==')
     try {
-      const report = await api.updateProject(selectedProject, allowDirty || (selectedProjectStatus?.dirty ?? false))
+      const report = await api.updateProject(selectedProject, confirmedAllowDirty)
       addLogs(...reportToLogs(report))
       if (report.ok) {
         const diff = report.details?.diff_stat ?? report.details?.status ?? '无 git 变更摘要'
         addLog('info', `更新摘要：${diff}`)
       }
+      setUpdatePreviewOpen(false)
+      setUpdatePreview(null)
       await inspectProjectInner(selectedProject, true)
     } catch (err) {
       addLog('error', `失败：更新业务项目 - ${err}`)
     } finally {
+      setUpdatePreviewBusy(false)
       setProjectBusy(false)
     }
-  }, [selectedProject, selectedProjectStatus, allowDirty, addLog, addLogs, inspectProjectInner])
+  }, [selectedProject, addLog, addLogs, inspectProjectInner])
 
   const handleOpenDir = useCallback(async () => {
     if (!selectedProject) return
@@ -458,9 +528,25 @@ export default function App() {
     addLog('info', `已请求打开目录：${selectedProject}`)
   }, [selectedProject, addLog])
 
+  const handleOpenCursor = useCallback(async (path?: string) => {
+    const target = path ?? selectedProject
+    if (!target) return
+    try {
+      await api.openInCursor(target)
+      addLog('info', `已请求在 Cursor 中打开：${target}`)
+    } catch (err) {
+      addLog('error', `在 Cursor 中打开失败：${err}`)
+      throw err
+    }
+  }, [selectedProject, addLog])
+
   // ── 初始化 ──
 
   const initialized = useRef(false)
+
+  useEffect(() => {
+    installRefreshCoordinator()
+  }, [])
 
   useEffect(() => {
     if (initialized.current) return
@@ -500,6 +586,7 @@ export default function App() {
           checkEnvironmentInner(),
           checkRepoInner(cfg.trellis_repo),
           checkCommandsInner(),
+          checkCursorInner(),
           initialProjects.length > 0 ? inspectProjectsInner(initialProjects) : Promise.resolve(),
         ]
         await Promise.allSettled(startupChecks)
@@ -572,6 +659,13 @@ export default function App() {
               onPathChange={setRepoPath}
             />
 
+            <SettingsCard
+              repoPath={repoPath}
+              onSaved={() => {
+                addLog('info', '工具链设置已更新。')
+              }}
+            />
+
             <CommandCard
               items={cmdItems}
               loading={cmdLoading}
@@ -611,15 +705,42 @@ export default function App() {
                 onInit={handleInitProject}
                 onUpdate={handleUpdateProject}
                 onOpenDir={handleOpenDir}
+                onOpenCursor={handleOpenCursor}
+                cursorStatus={cursorStatus}
+                cursorLoading={cursorLoading}
                 onAllowDirtyChange={setAllowDirty}
               />
 
-              <TaskManagerPanel
-                projectPath={selectedProject}
-                projectStatus={selectedProjectStatus}
-                highlightTaskPath={highlightTaskPath}
-                onHighlightConsumed={handleHighlightConsumed}
+              <ProjectGitPanel projectPath={selectedProject} projectStatus={selectedProjectStatus} />
+
+              <BatchUpdateCard
+                onCompleted={() => {
+                  addLog('info', '批量 Update 已结束，正在刷新项目状态。')
+                  void inspectProjectsInner(projects)
+                }}
               />
+
+              <Tabs value={projectPane} onValueChange={(value) => setProjectPane(value as ProjectPane)}>
+                <TabsList className="w-fit">
+                  <TabsTrigger value="tasks">任务</TabsTrigger>
+                  <TabsTrigger value="knowledge">知识库</TabsTrigger>
+                </TabsList>
+                <TabsContent value="tasks">
+                  <TaskManagerPanel
+                    projectPath={selectedProject}
+                    projectStatus={selectedProjectStatus}
+                    highlightTaskPath={highlightTaskPath}
+                    highlightedTaskInitialTab={highlightTaskPath ? 'context' : 'detail'}
+                    cursorStatus={cursorStatus}
+                    cursorLoading={cursorLoading}
+                    onOpenCursor={handleOpenCursor}
+                    onHighlightConsumed={handleHighlightConsumed}
+                  />
+                </TabsContent>
+                <TabsContent value="knowledge">
+                  <ProjectKnowledgeBrowser projectPath={selectedProject} projectStatus={selectedProjectStatus} />
+                </TabsContent>
+              </Tabs>
             </div>
           </div>
         ) : (
@@ -632,6 +753,17 @@ export default function App() {
           onCopy={handleCopyLogs}
           onClear={handleClearLogs}
         />
+
+        {updatePreviewOpen && selectedProject && updatePreview && (
+          <UpdatePreviewDialog
+            projectPath={selectedProject}
+            preview={updatePreview}
+            allowDirty={allowDirty}
+            confirming={updatePreviewBusy}
+            onCancel={handleCancelUpdatePreview}
+            onConfirm={handleConfirmUpdatePreview}
+          />
+        )}
       </div>
     </TooltipProvider>
   )

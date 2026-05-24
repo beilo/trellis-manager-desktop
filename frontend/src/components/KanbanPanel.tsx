@@ -5,15 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppInput } from './AppInput'
 import { KanbanTaskCard } from './KanbanTaskCard'
 import { api } from '@/api'
-import type {
-  AllTasksSnapshot,
-  ProjectTasksBlock,
-  TrellisTaskItem,
-  TrellisTaskStatus,
-} from '@/types'
+import { useRefreshSubscription } from '@/refreshCoordinator'
+import type { AllTasksSnapshot, TrellisTaskItem, TrellisTaskStatus } from '@/types'
 
-type StatusFilter = 'all' | 'planning' | 'in_progress' | 'completed'
+type BoardColumn = 'planning' | 'in_progress' | 'completed'
+type StatusFilter = 'all' | BoardColumn
 type SortMode = 'project' | 'status' | 'created'
+
+const COLUMN_TITLES: Record<BoardColumn, string> = {
+  planning: '规划中',
+  in_progress: '进行中',
+  completed: '已完成',
+}
 
 const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'all', label: '全部' },
@@ -38,10 +41,17 @@ function countDone(counts: Record<string, number>): number {
   return (counts.completed ?? 0) + (counts.done ?? 0)
 }
 
-function taskMatchesStatus(task: TrellisTaskItem, status: StatusFilter): boolean {
-  if (status === 'all') return true
-  if (status === 'completed') return task.status === 'completed' || task.status === 'done'
-  return task.status === status
+function normalizeColumn(task: TrellisTaskItem): BoardColumn | null {
+  if (task.status === 'planning') return 'planning'
+  if (task.status === 'in_progress') return 'in_progress'
+  if (task.status === 'completed' || task.status === 'done') return 'completed'
+  return null
+}
+
+function taskMatchesStatus(task: TrellisTaskItem, filter: StatusFilter): boolean {
+  // 三列看板保留旧状态筛选语义：已完成筛选同时包含 completed 与 done。
+  const column = normalizeColumn(task)
+  return filter === 'all' || column === filter
 }
 
 function sortTasks(tasks: TrellisTaskItem[], mode: SortMode): TrellisTaskItem[] {
@@ -63,8 +73,8 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
   const [snapshot, setSnapshot] = useState<AllTasksSnapshot | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [keyword, setKeyword] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [sortMode, setSortMode] = useState<SortMode>('project')
 
   const loadSnapshot = useCallback(async () => {
@@ -91,31 +101,51 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
     }
   }, [loadSnapshot])
 
-  const visibleProjects = useMemo(() => {
-    if (!snapshot) return []
-    const normalizedKeyword = keyword.trim().toLowerCase()
-    const blocks = snapshot.projects
-      .map((project): ProjectTasksBlock => {
-        const tasks = project.tasks.filter((task) => {
-          const matchesKeyword = normalizedKeyword
-            ? task.title.toLowerCase().includes(normalizedKeyword)
-            : true
-          return matchesKeyword && taskMatchesStatus(task, statusFilter)
-        })
-        return { ...project, tasks: sortTasks(tasks, sortMode) }
-      })
-      .filter((project) => project.tasks.length > 0)
+  useRefreshSubscription('kanban', ({ event }) => {
+    if (event.type !== 'tasks') return
 
-    // 项目分组是 PRD 的主展示形态；排序只调整组顺序或组内任务顺序。
-    if (sortMode === 'project') {
-      return [...blocks].sort((a, b) => a.project_name.localeCompare(b.project_name))
+    void loadSnapshot().catch((err: unknown) => {
+      console.error('自动刷新看板失败:', err)
+    })
+  })
+
+  const boardColumns = useMemo(() => {
+    const columns: Record<BoardColumn, Array<{ project_path: string; project_name: string; task: TrellisTaskItem }>> = {
+      planning: [],
+      in_progress: [],
+      completed: [],
     }
-    return blocks
+
+    if (!snapshot) return columns
+
+    const normalizedKeyword = keyword.trim().toLowerCase()
+    const projects = [...snapshot.projects]
+    if (sortMode === 'project') {
+      projects.sort((a, b) => a.project_name.localeCompare(b.project_name))
+    }
+
+    for (const project of projects) {
+      const tasks = sortTasks(
+        project.tasks.filter((task) => {
+          return normalizedKeyword ? task.title.toLowerCase().includes(normalizedKeyword) : true
+        }),
+        sortMode,
+      )
+
+      for (const task of tasks) {
+        if (!taskMatchesStatus(task, statusFilter)) continue
+        const column = normalizeColumn(task)
+        if (!column) continue
+        columns[column].push({ project_path: project.project_path, project_name: project.project_name, task })
+      }
+    }
+
+    return columns
   }, [keyword, snapshot, sortMode, statusFilter])
 
   const totalCounts = snapshot?.total_counts ?? {}
   const hasProjects = (snapshot?.project_count ?? 0) > 0
-  const hasVisibleTasks = visibleProjects.length > 0
+  const hasVisibleTasks = Object.values(boardColumns).some((items) => items.length > 0)
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
@@ -150,17 +180,17 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
       </div>
 
       <Card>
-        <CardContent className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-2">
-            {STATUS_FILTERS.map((item) => (
+            {STATUS_FILTERS.map((filter) => (
               <Button
-                key={item.value}
+                key={filter.value}
                 type="button"
-                variant={statusFilter === item.value ? 'default' : 'outline'}
+                variant={statusFilter === filter.value ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setStatusFilter(item.value)}
+                onClick={() => setStatusFilter(filter.value)}
               >
-                {item.label}
+                {filter.label}
               </Button>
             ))}
           </div>
@@ -215,29 +245,34 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
       ) : null}
 
       {hasVisibleTasks ? (
-        <div className="flex flex-col gap-4">
-          {visibleProjects.map((project) => (
-            <section key={project.project_path} className="flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-3 px-1">
-                <h3 className="truncate text-sm font-semibold text-foreground">
-                  {project.project_name}
-                </h3>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {project.tasks.length} 个任务
-                </span>
-              </div>
-              <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                {project.tasks.map((task) => (
-                  <KanbanTaskCard
-                    key={task.path}
-                    task={task}
-                    projectName={project.project_name}
-                    onClick={() => onNavigateToTask(project.project_path, task.path)}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+        <div className="grid gap-4 xl:grid-cols-3">
+          {(Object.keys(COLUMN_TITLES) as BoardColumn[]).map((column) => {
+            const tasks = boardColumns[column]
+            return (
+              <section key={column} className="flex min-h-0 flex-col gap-3 rounded-2xl border bg-card/70 p-3 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-foreground">{COLUMN_TITLES[column]}</h3>
+                  <span className="shrink-0 text-xs text-muted-foreground">{tasks.length} 个任务</span>
+                </div>
+                <div className="flex min-h-0 flex-1 flex-col gap-2">
+                  {tasks.length > 0 ? (
+                    tasks.map(({ project_path, project_name, task }) => (
+                      <KanbanTaskCard
+                        key={task.path}
+                        task={task}
+                        projectName={project_name}
+                        onClick={() => onNavigateToTask(project_path, task.path)}
+                      />
+                    ))
+                  ) : (
+                    <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
+                      暂无任务
+                    </div>
+                  )}
+                </div>
+              </section>
+            )
+          })}
         </div>
       ) : null}
     </div>

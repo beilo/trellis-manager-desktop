@@ -1,15 +1,23 @@
 import type {
   AllTasksSnapshot,
   EnvironmentItem,
+  FileTreeResult,
+  GitSummary,
+  JsonlFileResult,
   ManagerConfig,
-  OperationReport,
+  ManagerSettings,
+  BatchUpdateReport,
   OperationLogEntry,
+  OperationReport,
   PlatformInfo,
   ProjectStatus,
   ProjectTasksBlock,
   RepoStatus,
+  TaskDocumentKind,
+  TextFileResult,
   ToolCommandStatus,
   TrellisTaskSnapshot,
+  UpdatePreview,
 } from './types'
 
 declare global {
@@ -22,6 +30,8 @@ declare global {
 
 interface PywebviewAPI {
   get_config(): Promise<ManagerConfig>
+  get_settings(): Promise<ManagerSettings>
+  save_settings(settings: Partial<ManagerSettings>): Promise<void>
   save_repo_path(path: string): Promise<void>
   get_projects(): Promise<string[]>
   save_projects(projects: string[], last_selected_project?: string | null): Promise<void>
@@ -31,24 +41,37 @@ interface PywebviewAPI {
   get_platform_info(): Promise<PlatformInfo>
   check_environment(): Promise<EnvironmentItem[]>
   check_helm_status(): Promise<EnvironmentItem>
+  check_cursor_status?: () => Promise<EnvironmentItem>
   check_tool_repo(path: string): Promise<RepoStatus>
   check_wrapper_commands(): Promise<ToolCommandStatus[]>
   install_or_update_tool_repo(path: string): Promise<OperationReport>
   ensure_wrappers_and_path(path: string): Promise<OperationReport>
   inspect_project(path: string): Promise<ProjectStatus>
+  get_project_git_summary(path: string): Promise<GitSummary>
+  preview_project_update(path: string): Promise<UpdatePreview>
   init_project(path: string): Promise<OperationReport>
   update_project(path: string, allow_dirty: boolean): Promise<OperationReport>
+  list_outdated_projects(): Promise<ProjectStatus[]>
+  batch_update_projects(paths: string[] | null, allow_dirty: boolean): Promise<BatchUpdateReport>
   remember_project(path: string): Promise<void>
   get_recent_projects(): Promise<string[]>
   get_logs(): Promise<OperationLogEntry[]>
   select_directory(): Promise<string | null>
   open_directory(path: string): Promise<void>
   open_in_iterm(path: string): Promise<void>
+  open_in_cursor?: (path: string) => Promise<void>
   list_project_tasks(path: string, include_archive: boolean): Promise<TrellisTaskSnapshot>
   list_all_tasks?: () => Promise<AllTasksSnapshot>
   open_task_directory(task_path: string): Promise<void>
   push_task_to_helm(project_path: string, task_path: string): Promise<OperationReport>
+  list_project_files(project_path: string, subroot: string): Promise<FileTreeResult>
+  read_project_file(project_path: string, relative_path: string): Promise<TextFileResult>
+  read_project_jsonl(project_path: string, relative_path: string, limit?: number, offset?: number): Promise<JsonlFileResult>
+  list_task_context_files(task_path: string): Promise<FileTreeResult>
+  read_task_context_file(task_path: string, filename: string, limit?: number, offset?: number): Promise<TextFileResult | JsonlFileResult>
+  read_task_document(task_path: string, doc: TaskDocumentKind): Promise<TextFileResult>
 }
+
 
 function isPywebviewApiReady(candidate: PywebviewAPI | undefined): candidate is PywebviewAPI {
   return typeof candidate?.get_platform_info === 'function'
@@ -132,6 +155,14 @@ export const api = {
     return (await getApi()).get_config()
   },
 
+  async getSettings(): Promise<ManagerSettings> {
+    return (await getApi()).get_settings()
+  },
+
+  async saveSettings(settings: Partial<ManagerSettings>): Promise<void> {
+    return (await getApi()).save_settings(settings)
+  },
+
   async saveRepoPath(path: string): Promise<void> {
     return (await getApi()).save_repo_path(path)
   },
@@ -168,6 +199,21 @@ export const api = {
     return (await getApi()).check_helm_status()
   },
 
+  async checkCursorStatus(): Promise<EnvironmentItem> {
+    const bridge = await getApi()
+    if (typeof bridge.check_cursor_status === 'function') {
+      return bridge.check_cursor_status()
+    }
+    // 兼容旧桌面后端：缺少 Cursor 桥接时直接返回不可用，避免前端启动中断。
+    return {
+      name: 'cursor',
+      ok: false,
+      status: 'error',
+      message: '当前后端未提供 Cursor 检查接口。',
+      version: null,
+    }
+  },
+
   async checkToolRepo(path: string): Promise<RepoStatus> {
     return (await getApi()).check_tool_repo(path)
   },
@@ -188,12 +234,28 @@ export const api = {
     return (await getApi()).inspect_project(path)
   },
 
+  async getProjectGitSummary(path: string): Promise<GitSummary> {
+    return (await getApi()).get_project_git_summary(path)
+  },
+
+  async previewProjectUpdate(path: string): Promise<UpdatePreview> {
+    return (await getApi()).preview_project_update(path)
+  },
+
   async initProject(path: string): Promise<OperationReport> {
     return (await getApi()).init_project(path)
   },
 
   async updateProject(path: string, allowDirty: boolean): Promise<OperationReport> {
     return (await getApi()).update_project(path, allowDirty)
+  },
+
+  async listOutdatedProjects(): Promise<ProjectStatus[]> {
+    return (await getApi()).list_outdated_projects()
+  },
+
+  async batchUpdateProjects(paths: string[] | null = null, allowDirty: boolean = false): Promise<BatchUpdateReport> {
+    return (await getApi()).batch_update_projects(paths, allowDirty)
   },
 
   async rememberProject(path: string): Promise<void> {
@@ -220,6 +282,14 @@ export const api = {
     return (await getApi()).open_in_iterm(path)
   },
 
+  async openInCursor(path: string): Promise<void> {
+    const bridge = await getApi()
+    if (typeof bridge.open_in_cursor !== 'function') {
+      throw new Error('当前后端未提供 Cursor 打开接口。')
+    }
+    return bridge.open_in_cursor(path)
+  },
+
   async listProjectTasks(
     path: string,
     includeArchive: boolean = false
@@ -233,6 +303,35 @@ export const api = {
 
   async openTaskDirectory(taskPath: string): Promise<void> {
     return (await getApi()).open_task_directory(taskPath)
+  },
+
+  async listProjectFiles(path: string, subroot: string): Promise<FileTreeResult> {
+    return (await getApi()).list_project_files(path, subroot)
+  },
+
+  async readProjectFile(path: string, relativePath: string): Promise<TextFileResult> {
+    return (await getApi()).read_project_file(path, relativePath)
+  },
+
+  async readProjectJsonl(path: string, relativePath: string, limit: number = 200, offset: number = 0): Promise<JsonlFileResult> {
+    return (await getApi()).read_project_jsonl(path, relativePath, limit, offset)
+  },
+
+  async listTaskContextFiles(taskPath: string): Promise<FileTreeResult> {
+    return (await getApi()).list_task_context_files(taskPath)
+  },
+
+  async readTaskContextFile(
+    taskPath: string,
+    filename: string,
+    limit: number = 200,
+    offset: number = 0,
+  ): Promise<TextFileResult | JsonlFileResult> {
+    return (await getApi()).read_task_context_file(taskPath, filename, limit, offset)
+  },
+
+  async readTaskDocument(taskPath: string, doc: TaskDocumentKind): Promise<TextFileResult> {
+    return (await getApi()).read_task_document(taskPath, doc)
   },
 
   async pushTaskToHelm(projectPath: string, taskPath: string): Promise<OperationReport> {

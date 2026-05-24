@@ -5,6 +5,62 @@ import { cn } from '@/lib/utils'
 import { StatusBadge } from './StatusBadge'
 import type { ProjectStatus } from '@/types'
 
+type HealthTone = 'ok' | 'warning' | 'error' | 'unknown'
+
+interface HealthPillProps {
+  tone: HealthTone
+  label: string
+  title: string
+}
+
+function HealthPill({ tone, label, title }: HealthPillProps) {
+  const classes: Record<HealthTone, string> = {
+    ok: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    warning: 'border-amber-200 bg-amber-50 text-amber-700',
+    error: 'border-rose-200 bg-rose-50 text-rose-700',
+    unknown: 'border-slate-200 bg-slate-50 text-slate-600',
+  }
+
+  return (
+    <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold', classes[tone])} title={title}>
+      {label}
+    </span>
+  )
+}
+
+function projectHealth(status: ProjectStatus | undefined): Array<{ tone: HealthTone; label: string; title: string }> {
+  if (!status) {
+    return [{ tone: 'unknown', label: '未检查', title: '项目状态尚未加载' }]
+  }
+
+  const items: Array<{ tone: HealthTone; label: string; title: string }> = []
+  if (!status.has_trellis) {
+    items.push({ tone: 'warning', label: '未初始化', title: status.message })
+  } else if (status.version_outdated) {
+    items.push({ tone: 'warning', label: '版本过期', title: status.latest_version ? `当前 ${status.trellis_version ?? '-'}，最新 ${status.latest_version}` : status.message })
+  }
+
+  if (status.dirty) {
+    items.push({ tone: 'error', label: 'Dirty', title: '项目工作区存在未提交修改' })
+  }
+
+  if (items.length === 0) {
+    items.push({ tone: 'ok', label: '正常', title: status.message })
+  }
+
+  return items
+}
+
+function projectLabel(status: ProjectStatus | undefined): { label: string } {
+  if (!status) return { label: '未检查' }
+  if (!status.exists) return { label: '不存在' }
+  if (!status.is_git) return { label: '非 Git' }
+  if (!status.has_trellis) return { label: '未初始化' }
+  if (status.version_outdated) return { label: '版本过期' }
+  if (status.dirty) return { label: 'Dirty' }
+  return { label: '正常' }
+}
+
 interface ProjectListProps {
   projects: string[]
   selectedProject: string | null
@@ -59,7 +115,10 @@ export function ProjectList({
           <div className="flex flex-col gap-1 p-2">
             {projects.map((path) => {
               const selected = path === selectedProject
-              const status = statuses[path]?.status ?? 'unknown'
+              const projectStatus = statuses[path]
+              const status = projectStatus?.status ?? 'unknown'
+              const health = projectHealth(projectStatus)
+              const summary = projectLabel(projectStatus)
               return (
                 <div
                   key={path}
@@ -77,15 +136,22 @@ export function ProjectList({
                       : 'border-l-transparent hover:bg-muted/65 hover:border-border/10',
                   )}
                 >
-                  <StatusBadge status={status} className="px-2" />
-                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className={cn(
-                      'truncate text-sm font-semibold transition-colors duration-150',
-                      selected ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'
-                    )}>
-                      {projectName(path)}
-                    </span>
-                    <span className="truncate text-xs text-muted-foreground" title={path}>
+                  <StatusBadge status={status} label={summary.label} className="px-2" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className={cn(
+                        'truncate text-sm font-semibold transition-colors duration-150',
+                        selected ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'
+                      )}>
+                        {projectName(path)}
+                      </span>
+                      <div className="flex min-w-0 shrink-0 flex-wrap gap-1">
+                        {health.map((item) => (
+                          <HealthPill key={`${path}-${item.label}`} tone={item.tone} label={item.label} title={item.title} />
+                        ))}
+                      </div>
+                    </div>
+                    <span className="truncate text-xs text-muted-foreground" title={`${path}\n${projectStatus?.message ?? '状态尚未加载'}`}>
                       {path}
                     </span>
                   </div>

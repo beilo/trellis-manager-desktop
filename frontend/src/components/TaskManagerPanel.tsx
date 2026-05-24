@@ -2,15 +2,20 @@ import { useCallback, useEffect, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TaskList } from './TaskList'
-import { TaskDetail } from './TaskDetail'
+import { TaskDetail, type TaskDetailTab } from './TaskDetail'
 import { api } from '@/api'
+import { useRefreshSubscription } from '@/refreshCoordinator'
 import type { EnvironmentItem, TrellisTaskSnapshot, TrellisTaskItem, ProjectStatus } from '@/types'
 
 interface TaskManagerPanelProps {
   projectPath: string | null
   projectStatus: ProjectStatus | null
   highlightTaskPath?: string | null
+  cursorStatus: EnvironmentItem | null
+  cursorLoading: boolean
+  onOpenCursor: (path?: string) => Promise<void>
   onHighlightConsumed?: () => void
+  highlightedTaskInitialTab?: TaskDetailTab
 }
 
 function EmptyState({ message, action }: { message: string; action?: React.ReactNode }) {
@@ -26,7 +31,11 @@ export function TaskManagerPanel({
   projectPath,
   projectStatus,
   highlightTaskPath = null,
+  cursorStatus,
+  cursorLoading,
+  onOpenCursor,
   onHighlightConsumed,
+  highlightedTaskInitialTab = 'detail',
 }: TaskManagerPanelProps) {
   const [snapshot, setSnapshot] = useState<TrellisTaskSnapshot | null>(null)
   const [loading, setLoading] = useState(false)
@@ -34,6 +43,7 @@ export function TaskManagerPanel({
   const [includeArchive, setIncludeArchive] = useState(false)
   const [helmStatus, setHelmStatus] = useState<EnvironmentItem | null>(null)
   const [helmLoading, setHelmLoading] = useState(false)
+  const [detailInitialTab, setDetailInitialTab] = useState<TaskDetailTab>('detail')
 
   const loadTasks = useCallback(async () => {
     if (!projectPath) return
@@ -49,6 +59,7 @@ export function TaskManagerPanel({
         : null
       setSelectedTask((current) => {
         if (highlightedTask) {
+          setDetailInitialTab(highlightedTaskInitialTab)
           return highlightedTask
         }
         if (activeTasks.length > 0 && !current) {
@@ -77,7 +88,7 @@ export function TaskManagerPanel({
       setLoading(false)
       setHelmLoading(false)
     }
-  }, [projectPath, includeArchive, highlightTaskPath, onHighlightConsumed])
+  }, [projectPath, includeArchive, highlightTaskPath, highlightedTaskInitialTab, onHighlightConsumed])
 
   useEffect(() => {
     let cancelled = false
@@ -95,6 +106,16 @@ export function TaskManagerPanel({
       cancelled = true
     }
   }, [projectStatus?.has_trellis, loadTasks])
+
+  useRefreshSubscription('tasks', ({ event }) => {
+    if (event.type !== 'tasks') return
+    if (!projectPath || !projectStatus?.has_trellis) return
+    if (event.projectPath !== projectPath) return
+
+    void loadTasks().catch((err: unknown) => {
+      console.error('自动刷新任务失败:', err)
+    })
+  })
 
   if (!projectPath) {
     return <EmptyState message="请先选择项目" />
@@ -175,10 +196,14 @@ export function TaskManagerPanel({
             <TaskDetail
               task={selectedTask}
               projectPath={projectPath}
+              initialTab={detailInitialTab}
               helmStatus={helmStatus}
               helmLoading={helmLoading}
+              cursorStatus={cursorStatus}
+              cursorLoading={cursorLoading}
               onOpenDir={(path) => api.openTaskDirectory(path)}
               onOpenIterm={(path) => api.openInIterm(path)}
+              onOpenCursor={onOpenCursor}
               onPushHelm={(currentProjectPath, taskPath) => api.pushTaskToHelm(currentProjectPath, taskPath)}
             />
           )}

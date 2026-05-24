@@ -99,6 +99,31 @@ export interface ProjectStatus {
   version_outdated: boolean
 }
 
+export interface CommitEntry {
+  short_hash: string
+  title: string
+  oneline: string
+}
+
+export interface GitSummary {
+  branch: string | null
+  dirty: boolean
+  dirty_files: string[]
+  ahead: number | null
+  behind: number | null
+  recent_commits: CommitEntry[]
+}
+
+export interface UpdatePreview {
+  ok: boolean
+  message: string
+  dry_run_output: string
+  dirty_files_before: string[]
+  trellis_version_before: string | null
+  latest_version: string | null
+  would_run_migrations: boolean
+}
+
 export interface CommandResult {
   command: string[]
   command_line: string
@@ -130,7 +155,13 @@ export interface OperationReport {
   details: Record<string, string>
 }
 
-export interface ManagerConfig {
+export interface ManagerSettings {
+  official_repo_url: string
+  accelerated_repo_url: string
+  distribution_branch: string
+}
+
+export interface ManagerConfig extends ManagerSettings {
   trellis_repo: string
   projects: string[]
   last_selected_project: string | null
@@ -167,4 +198,74 @@ export interface OperationLogEntry {
   created_at: string
   commands?: CommandResult[]
   details?: Record<string, string>
+  results?: ProjectUpdateResult[]
 }
+
+export interface ProjectUpdateResult {
+  path: string
+  ok: boolean
+  message: string
+  report: OperationLogEntry | null
+  skipped: boolean
+  reason: string | null
+}
+
+export interface BatchUpdateReport {
+  ok: boolean
+  message: string
+  results: ProjectUpdateResult[]
+  total: number
+  updated_count: number
+  failed_count: number
+  skipped_count: number
+}
+
+export interface FileReadError {
+  code: string
+  message: string
+}
+
+export type FileKind = 'file' | 'directory'
+
+export interface FileTreeItem {
+  path: string
+  name: string
+  type: FileKind
+  size: number
+  mtime: number
+  children?: FileTreeItem[] | null
+}
+
+export interface FileTreeResult {
+  ok: boolean
+  root: string | null
+  items: FileTreeItem[]
+  error?: FileReadError | null
+}
+
+export interface TextFileResult {
+  ok: boolean
+  path: string | null
+  content: string | null
+  size: number | null
+  truncated: boolean
+  error?: FileReadError | null
+}
+
+export interface JsonlLineError {
+  line: number
+  message: string
+}
+
+export interface JsonlFileResult {
+  ok: boolean
+  path: string | null
+  items: unknown[]
+  offset: number
+  limit: number
+  next_offset: number | null
+  errors: JsonlLineError[]
+  error?: FileReadError | null
+}
+
+export type TaskDocumentKind = 'prd' | 'design' | 'implement'
