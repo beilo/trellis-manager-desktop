@@ -101,6 +101,7 @@ export interface ProjectStatus {
 
 export interface CommitEntry {
   short_hash: string
+  date: string | null
   title: string
   oneline: string
 }

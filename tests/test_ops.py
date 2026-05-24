@@ -64,8 +64,8 @@ class FakeRunner:
             return self._result(normalized, cwd, f"{DISTRIBUTION_BRANCH}\n")
         if normalized[:4] == ["git", "remote", "get-url", "origin"]:
             return self._result(normalized, cwd, f"{OFFICIAL_REPO_URL}\n")
-        if normalized[:4] == ["git", "log", "-5", "--oneline"]:
-            return self._result(normalized, cwd, "abc1234 Initial commit\ndef5678 Add feature\n")
+        if normalized[:5] == ["git", "log", "-5", "--date=short", "--pretty=format:%h%x1f%ad%x1f%s"]:
+            return self._result(normalized, cwd, "abc1234\x1f2026-05-24\x1fInitial commit\ndef5678\x1f2026-05-23\x1fAdd feature\n")
         if normalized[:4] == ["git", "fetch", "origin", DISTRIBUTION_BRANCH]:
             return self._result(normalized, cwd, "")
         if normalized[:4] == ["git", "rev-list", "--left-right", "--count"]:
@@ -204,7 +204,9 @@ class TrellisManagerOpsTest(unittest.TestCase):
             self.assertEqual(summary.behind, 2)
             self.assertIn(["git", "rev-list", "--left-right", "--count", "HEAD...@{upstream}"], [call[0] for call in runner.calls])
             self.assertEqual(summary.recent_commits[0].short_hash, "abc1234")
+            self.assertEqual(summary.recent_commits[0].date, "2026-05-24")
             self.assertEqual(summary.recent_commits[0].title, "Initial commit")
+            self.assertEqual(summary.recent_commits[0].oneline, "abc1234 Initial commit")
 
     def test_project_git_summary_clean_project_has_empty_dirty_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
