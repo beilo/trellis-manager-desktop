@@ -150,7 +150,7 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
       </div>
 
       <Card>
-        <CardContent className="flex flex-col gap-3 md:flex-row md:items-center">
+        <CardContent className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="flex flex-wrap gap-2">
             {STATUS_FILTERS.map((item) => (
               <Button
@@ -164,33 +164,35 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
               </Button>
             ))}
           </div>
-          <AppInput
-            className="md:max-w-xs"
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-            placeholder="搜索任务标题"
-          />
-          <select
-            className="h-8 rounded-lg border border-border bg-background px-2 text-sm"
-            value={sortMode}
-            onChange={(event) => setSortMode(event.target.value as SortMode)}
-            aria-label="排序"
-          >
-            <option value="project">按项目名</option>
-            <option value="status">按状态</option>
-            <option value="created">按创建时间</option>
-          </select>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={loadSnapshot}
-            disabled={loading}
-            title="刷新"
-          >
-            <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : undefined} />
-            刷新
-          </Button>
+          <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto]">
+            <AppInput
+              className="min-w-0"
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              placeholder="搜索任务标题"
+            />
+            <select
+              className="h-8 rounded-lg border border-border bg-background px-2 text-sm"
+              value={sortMode}
+              onChange={(event) => setSortMode(event.target.value as SortMode)}
+              aria-label="排序"
+            >
+              <option value="project">按项目名</option>
+              <option value="status">按状态</option>
+              <option value="created">按创建时间</option>
+            </select>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={loadSnapshot}
+              disabled={loading}
+              title="刷新"
+            >
+              <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : undefined} />
+              刷新
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

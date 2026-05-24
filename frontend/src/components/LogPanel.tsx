@@ -6,38 +6,39 @@ import { Terminal, ChevronUp, ChevronDown, Copy, Trash2, Maximize2, Minimize2 } 
 import type { LogEntry, LogLevel } from '@/types'
 
 const LEVEL_STYLES: Record<LogLevel, { color: string; prefix: string }> = {
-  task: { color: 'text-blue-400 font-bold border-l-2 border-blue-500 pl-2 my-1', prefix: '[任务]' },
-  success: { color: 'text-emerald-400 font-bold border-l-2 border-emerald-500 pl-2 my-1', prefix: '[成功]' },
-  error: { color: 'text-rose-400 font-bold border-l-2 border-rose-500 pl-2 my-1', prefix: '[失败]' },
-  command: { color: 'text-amber-300 font-mono opacity-90', prefix: '$' },
-  stdout: { color: 'text-slate-300 font-mono opacity-80', prefix: '' },
-  stderr: { color: 'text-rose-300 font-mono opacity-80', prefix: '' },
-  info: { color: 'text-slate-400 font-medium', prefix: '[信息]' },
+  task: { color: 'text-blue-400 font-semibold border-l-[3px] border-blue-500 pl-2.5 my-1.5', prefix: '[任务]' },
+  success: { color: 'text-emerald-400 font-semibold border-l-[3px] border-emerald-500 pl-2.5 my-1.5', prefix: '[成功]' },
+  error: { color: 'text-rose-400 font-semibold border-l-[3px] border-rose-500 pl-2.5 my-1.5', prefix: '[失败]' },
+  command: { color: 'text-amber-200/90 font-mono pl-3', prefix: '$' },
+  stdout: { color: 'text-slate-300/80 font-mono pl-3', prefix: '' },
+  stderr: { color: 'text-rose-300/80 font-mono pl-3', prefix: '' },
+  info: { color: 'text-slate-400/90 font-medium pl-3', prefix: '[信息]' },
 }
 
 interface LogPanelProps {
   entries: LogEntry[]
+  autoOpen: boolean
   onCopy: () => void
   onClear: () => void
 }
 
 type PanelState = 'collapsed' | 'expanded' | 'maximized'
 
-export function LogPanel({ entries, onCopy, onClear }: LogPanelProps) {
+export function LogPanel({ entries, autoOpen, onCopy, onClear }: LogPanelProps) {
   const [panelState, setPanelState] = useState<PanelState>('collapsed')
   const scrollRootRef = useRef<HTMLDivElement>(null)
   const prevLengthRef = useRef(entries.length)
 
   // Auto-open when new task/command logs arrive
   useEffect(() => {
-    if (entries.length > prevLengthRef.current) {
+    if (autoOpen && entries.length > prevLengthRef.current) {
       const lastEntry = entries[entries.length - 1]
       if (lastEntry && (lastEntry.level === 'task' || lastEntry.level === 'command')) {
         window.requestAnimationFrame(() => setPanelState('expanded'))
       }
     }
     prevLengthRef.current = entries.length
-  }, [entries])
+  }, [autoOpen, entries])
 
   // Scroll to bottom on new entries
   useEffect(() => {
@@ -83,31 +84,46 @@ export function LogPanel({ entries, onCopy, onClear }: LogPanelProps) {
   return (
     <div
       className={cn(
-        'fixed bottom-0 left-0 right-0 z-50 px-6 pb-0 bg-background/40 backdrop-blur-md border-t border-border/10',
-        'transition-all duration-300 ease-out'
+        'fixed z-50 transition-all duration-300 ease-out',
+        panelState === 'collapsed'
+          ? 'bottom-4 left-6'
+          : 'bottom-0 left-0 right-0 px-6 pb-0 bg-background/40 backdrop-blur-md border-t border-border/10',
       )}
     >
       <div
         className={cn(
-          'mx-auto max-w-[1400px] rounded-t-xl bg-slate-950 border-t border-x border-slate-800 shadow-2xl overflow-hidden',
+          'bg-slate-950 border border-slate-800 shadow-2xl overflow-hidden',
           'transition-all duration-300 ease-out transition-drawer',
+          panelState === 'collapsed'
+            ? 'w-fit rounded-xl'
+            : 'mx-auto max-w-[1400px] rounded-t-xl',
           heightClass
         )}
       >
         {/* Header Bar */}
         <div
           onClick={toggleExpand}
-          className="group flex items-center justify-between px-5 h-11 border-b border-slate-800/80 cursor-pointer select-none bg-slate-950 hover:bg-slate-900/60 transition-colors duration-150"
+          className={cn(
+            'group flex items-center justify-between h-11 cursor-pointer select-none bg-slate-950 hover:bg-slate-900/60 transition-colors duration-150',
+            panelState === 'collapsed' ? 'gap-3 px-3' : 'px-5 border-b border-slate-800/80',
+          )}
         >
           {/* Left info */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
             <div className="relative flex size-5 items-center justify-center rounded bg-slate-900 text-slate-400 border border-slate-800">
               <Terminal className="size-3" />
-              {activeTasksCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-blue-500 animate-ping" />
-              )}
             </div>
-            <span className="text-xs font-bold text-slate-200 tracking-wide uppercase">命令控制台</span>
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "size-2 rounded-full transition-all duration-300",
+                activeTasksCount > 0
+                  ? "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-pulse-ring"
+                  : errorsCount > 0
+                    ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)] animate-pulse"
+                    : "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]"
+              )} />
+              <span className="text-xs font-bold text-slate-200 tracking-wide uppercase">命令控制台</span>
+            </div>
             <div className="flex items-center gap-1.5 ml-2">
               <span className="text-[10px] font-medium text-slate-500 bg-slate-900 px-2 py-0.5 rounded border border-slate-800/80 tabular-nums">
                 {entries.length} 运行记录
@@ -121,7 +137,10 @@ export function LogPanel({ entries, onCopy, onClear }: LogPanelProps) {
           </div>
 
           {/* Drag Handle Indicator */}
-          <div className="hidden sm:flex flex-col gap-0.5 items-center opacity-40 group-hover:opacity-100 transition-opacity duration-200">
+          <div className={cn(
+            'hidden flex-col gap-0.5 items-center opacity-40 group-hover:opacity-100 transition-opacity duration-200',
+            panelState === 'collapsed' ? 'sm:hidden' : 'sm:flex',
+          )}>
             <div className="w-8 h-1 rounded-full bg-slate-700" />
           </div>
 

@@ -28,16 +28,38 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange }: He
       </div>
 
       <div className="flex flex-wrap items-center justify-start gap-2 pt-1 lg:justify-end">
-        <div className="flex items-center rounded-lg border bg-muted/40 p-1">
+        <div className="relative flex w-[240px] h-9 items-center rounded-full bg-muted/50 dark:bg-muted/20 p-1 border border-border/30 select-none">
+          {/* Slider Background */}
+          <div
+            className="absolute top-1 bottom-1 rounded-full bg-blue-500 dark:bg-blue-600 transition-all duration-200 ease-out shadow-sm"
+            style={{
+              left: activeTab === 'kanban' ? '4px' : activeTab === 'toolchain' ? '82px' : '160px',
+              width: '76px',
+            }}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onTabChange('kanban')}
+            className={cn(
+              'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
+              activeTab === 'kanban'
+                ? 'text-white font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-transparent dark:hover:bg-transparent',
+            )}
+          >
+            <LayoutDashboard data-icon="inline-start" />
+            看板
+          </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => onTabChange('toolchain')}
             className={cn(
-              'h-8 transition-all duration-150',
+              'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
               activeTab === 'toolchain'
-                ? 'bg-blue-500 text-white shadow-md font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                ? 'text-white font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-transparent dark:hover:bg-transparent',
             )}
           >
             <Wrench data-icon="inline-start" />
@@ -48,28 +70,14 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange }: He
             size="sm"
             onClick={() => onTabChange('projects')}
             className={cn(
-              'h-8 transition-all duration-150',
+              'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
               activeTab === 'projects'
-                ? 'bg-blue-500 text-white shadow-md font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                ? 'text-white font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-transparent dark:hover:bg-transparent',
             )}
           >
             <FolderGit2 data-icon="inline-start" />
             项目
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onTabChange('kanban')}
-            className={cn(
-              'h-8 transition-all duration-150',
-              activeTab === 'kanban'
-                ? 'bg-blue-500 text-white shadow-md font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-            )}
-          >
-            <LayoutDashboard data-icon="inline-start" />
-            看板
           </Button>
         </div>
         <div className="flex items-center gap-2 shrink-0">

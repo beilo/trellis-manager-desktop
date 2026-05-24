@@ -85,6 +85,21 @@ export default function App() {
   const [platformInfo, setPlatformInfo] = useState<PlatformInfo | null>(null)
   const [activeTab, setActiveTab] = useState<ActiveTab>(getInitialTab)
 
+  // ── 系统主题自动同步 ──
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      if (e.matches) {
+        document.documentElement.classList.add('dark')
+      } else {
+        document.documentElement.classList.remove('dark')
+      }
+    }
+    handleChange(mediaQuery)
+    mediaQuery.addEventListener('change', handleChange)
+    return () => mediaQuery.removeEventListener('change', handleChange)
+  }, [])
+
   // 环境检查
   const [envItems, setEnvItems] = useState<EnvironmentItem[]>([])
   const [envLoading, setEnvLoading] = useState(false)
@@ -110,6 +125,7 @@ export default function App() {
 
   // 操作日志
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
+  const [logAutoOpenEnabled, setLogAutoOpenEnabled] = useState(false)
 
   const addLogs = useCallback((...entries: LogEntry[]) => {
     setLogEntries((prev) => [...prev, ...entries])
@@ -479,15 +495,18 @@ export default function App() {
           addLogs(...logs.slice(0, 20).flatMap(operationLogToEntries))
         }
 
-        // 启动后立即刷新工具链和已保存项目状态。
-        checkEnvironmentInner()
-        checkRepoInner(cfg.trellis_repo)
-        checkCommandsInner()
-        if (initialProjects.length > 0) {
-          inspectProjectsInner(initialProjects)
-        }
+        // 启动后台检查只更新摘要和日志数量，不主动弹开底部控制台遮挡首屏内容。
+        const startupChecks = [
+          checkEnvironmentInner(),
+          checkRepoInner(cfg.trellis_repo),
+          checkCommandsInner(),
+          initialProjects.length > 0 ? inspectProjectsInner(initialProjects) : Promise.resolve(),
+        ]
+        await Promise.allSettled(startupChecks)
+        setLogAutoOpenEnabled(true)
       } catch (err) {
         addLog('error', `初始化失败：${err}`)
+        setLogAutoOpenEnabled(true)
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -609,6 +628,7 @@ export default function App() {
 
         <LogPanel
           entries={logEntries}
+          autoOpen={logAutoOpenEnabled}
           onCopy={handleCopyLogs}
           onClear={handleClearLogs}
         />

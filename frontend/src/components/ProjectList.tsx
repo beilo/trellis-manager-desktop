@@ -30,7 +30,7 @@ export function ProjectList({
   onRemove,
 }: ProjectListProps) {
   return (
-    <aside className="rounded-xl border bg-card text-card-foreground overflow-hidden">
+    <aside className="rounded-2xl border border-border/40 bg-card/80 dark:bg-card/75 backdrop-blur-md text-card-foreground overflow-hidden shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
         <div className="flex flex-col gap-0.5 min-w-0">
           <span className="text-sm font-bold text-foreground">项目列表</span>
@@ -71,15 +71,18 @@ export function ProjectList({
                   }}
                   className={cn(
                     'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-left cursor-pointer',
-                    'transition-all duration-150 hover:bg-muted',
+                    'transition-all duration-150 border border-transparent border-l-[3px]',
                     selected
-                      ? 'bg-blue-100 dark:bg-blue-900/40 border-2 border-blue-500 shadow-sm'
-                      : 'border-2 border-transparent hover:border-border',
+                      ? 'bg-blue-50/70 dark:bg-blue-950/25 border-blue-500/5 dark:border-blue-500/10 border-l-blue-500 shadow-[0_2px_8px_rgba(59,130,246,0.04)]'
+                      : 'border-l-transparent hover:bg-muted/65 hover:border-border/10',
                   )}
                 >
                   <StatusBadge status={status} className="px-2" />
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="truncate text-sm font-semibold text-foreground">
+                    <span className={cn(
+                      'truncate text-sm font-semibold transition-colors duration-150',
+                      selected ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'
+                    )}>
                       {projectName(path)}
                     </span>
                     <span className="truncate text-xs text-muted-foreground" title={path}>
