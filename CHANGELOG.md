@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Manager P3 批量 Update 与配置页**：工具链页新增过期项目入口和设置齿轮，项目页新增批量 Update 操作栏与结果对话框，配置页复用现有 settings API 并支持 URL / 分支校验、恢复默认和保存持久化。
+- **Manager P3 批量 Update 与配置页**：项目列表新增批量 Update 入口与结果对话框，工具链页新增设置齿轮，配置页复用现有 settings API 并支持 URL / 分支校验、恢复默认和保存持久化。
 - **前端文件监听自动刷新**：接入 `window.onTrellisFileChange`，任务变更自动刷新当前项目任务管理与跨项目看板，版本变更自动刷新当前项目健康状态，并保留旧后端 no-op 降级。
 - **Manager 批量项目更新 API**：新增落后项目筛选、批量更新聚合结果、dirty 默认跳过、单项失败继续执行、单条聚合 operation log、pywebview 桥接与前端类型/API 包装，并补充后端与桥接单元测试。
 - **SafeFileReader 与 Trellis 文件读取 API**：新增受限只读文件读取后端、任务文档/Context JSONL 桥接 API、前端类型与 API 包装，并补充路径穿越、符号链接逃逸、超大文件、缺失文件、非 UTF-8 与 JSONL 部分成功单元测试。
@@ -12,7 +12,7 @@
 - **Update 预览确认流**：单项目 Update 改为先 dry-run 预览再弹窗确认，预览失败禁用最终确认，dirty 且未显式允许时要求在弹窗内二次确认，并保留最终执行后的日志输出与状态刷新。
 - **任务文档与 Context 预览**：任务详情新增详情 / PRD / Design / Implement / Context Tab，Markdown 使用安全只读渲染，JSONL 支持分页加载与 raw JSON 展开。
 - **项目 Git 与知识库面板**：项目页新增只读 Git 快捷面板、任务 / 知识库切换、`.trellis/spec` 与 `.trellis/workspace` 文件树浏览，并复用 Markdown / JSONL viewer。
-- **批量 Update 与工具链设置 UI**：项目页新增批量 Update 卡片，工具链页新增仓库 URL / 镜像 / 分发分支设置卡片，保存后供后续检查与下载更新使用。
+- **批量 Update 与工具链设置 UI**：项目列表新增批量 Update 入口，工具链页新增仓库 URL / 镜像 / 分发分支设置卡片，保存后供后续检查与下载更新使用。
 
 ### Changed
 

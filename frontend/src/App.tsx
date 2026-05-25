@@ -14,7 +14,6 @@ import { LogPanel } from './components/LogPanel'
 import { TaskManagerPanel } from './components/TaskManagerPanel'
 import { KanbanPanel } from './components/KanbanPanel'
 import { UpdatePreviewDialog } from './components/UpdatePreviewDialog'
-import { BatchUpdateCard } from './components/BatchUpdateCard'
 import { BatchUpdateDialog } from './components/BatchUpdateDialog'
 import { SettingsCard } from './components/SettingsCard'
 import { SettingsDialog } from './components/SettingsDialog'
@@ -716,19 +715,7 @@ export default function App() {
           onOpenSettings={handleOpenSettings}
         />
 
-        {activeTab === 'toolchain' && (
-          <>
-            <SummaryCards state={summaryState} showProject={false} />
-            <div className="mx-auto w-full max-w-5xl">
-              <BatchUpdateCard
-                outdatedCount={outdatedProjects.length}
-                loading={outdatedLoading}
-                onRefresh={() => void loadOutdatedProjectsInner()}
-                onOpen={handleOpenBatchUpdate}
-              />
-            </div>
-          </>
-        )}
+        {activeTab === 'toolchain' && <SummaryCards state={summaryState} showProject={false} />}
 
         {activeTab === 'toolchain' ? (
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
@@ -817,13 +804,6 @@ export default function App() {
               />
 
               <ProjectGitPanel projectPath={selectedProject} projectStatus={selectedProjectStatus} />
-
-              <BatchUpdateCard
-                outdatedCount={outdatedProjects.length}
-                loading={outdatedLoading}
-                onRefresh={() => void loadOutdatedProjectsInner()}
-                onOpen={handleOpenBatchUpdate}
-              />
 
               <Tabs value={projectPane} onValueChange={(value) => setProjectPane(value as ProjectPane)}>
                 <TabsList className="w-fit">

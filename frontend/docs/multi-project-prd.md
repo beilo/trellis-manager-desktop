@@ -143,8 +143,8 @@ interface AppState {
 
 ### 4.6 批量 Update 与工具链配置
 
-- 工具链 Tab Summary 区域展示过期项目数量，并提供批量 Update 入口
-- 项目 Tab 的项目列表顶部提供同一批量 Update 入口
+- 批量 Update 入口只放在项目 Tab 的项目列表顶部
+- 工具链 Tab 不展示批量 Update 卡片，避免工具链配置和业务项目操作混在一起
 - 批量 Update 对话框调用 `list_outdated_projects()`，默认全选过期项目，dirty 项目默认由后端跳过
 - 勾选“允许 dirty 项目更新”后调用 `batch_update_projects(paths, allow_dirty=true)`
 - 结果表保留成功、失败、跳过状态和消息，并提供跳转底部日志的入口
