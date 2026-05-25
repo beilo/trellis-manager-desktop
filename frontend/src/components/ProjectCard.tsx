@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { StatusBadge } from './StatusBadge'
+import { cn } from '@/lib/utils'
 import { StepBadge, type StepStatus } from './StepBadge'
 import type { EnvironmentItem, ProjectStatus } from '@/types'
 
@@ -38,6 +39,9 @@ export function ProjectCard({
   onAllowDirtyChange,
 }: ProjectCardProps) {
   const projectStatus = status?.status ?? 'unknown'
+  const recommendInit = Boolean(projectPath && status && status.exists && status.is_git && !status.has_trellis)
+  const recommendUpdate = Boolean(projectPath && status && status.exists && status.is_git && status.has_trellis && status.version_outdated)
+
   const cursorDisabledReason = cursorLoading
     ? '正在检查 Cursor'
     : cursorStatus && !cursorStatus.ok
@@ -78,11 +82,31 @@ export function ProjectCard({
             {loading && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {loading ? '检查中…' : '检查项目'}
           </Button>
-          <Button size="sm" onClick={onInit} disabled={busy || !projectPath}>
+          <Button
+            size="sm"
+            onClick={onInit}
+            disabled={busy || !projectPath}
+            className={cn(
+              "transition-all duration-200 font-semibold",
+              recommendInit
+                ? "bg-blue-600 hover:bg-blue-700 text-white border-transparent shadow-sm active:scale-95"
+                : "border border-border bg-background hover:bg-muted"
+            )}
+          >
             {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {busy ? '处理中…' : 'Init'}
           </Button>
-          <Button size="sm" onClick={onUpdate} disabled={busy || !projectPath}>
+          <Button
+            size="sm"
+            onClick={onUpdate}
+            disabled={busy || !projectPath}
+            className={cn(
+              "transition-all duration-200 font-semibold",
+              recommendUpdate
+                ? "bg-blue-600 hover:bg-blue-700 text-white border-transparent shadow-sm active:scale-95"
+                : "border border-border bg-background hover:bg-muted"
+            )}
+          >
             {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {busy ? '处理中…' : 'Update'}
           </Button>
@@ -120,15 +144,35 @@ export function ProjectCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <StatusBadge
-            status={projectPath ? projectStatus : 'unknown'}
-            label={badgeLabel}
-          />
-          <span className="text-sm text-muted-foreground flex-1 min-w-0 truncate" title={detailText}>
-            {detailText}
-          </span>
-        </div>
+        {projectPath && status && (status.status === 'warning' || status.status === 'error') ? (
+          <div className={cn(
+            "rounded-xl border p-3 flex items-start gap-2.5 text-sm transition-all duration-200 shadow-sm",
+            status.status === 'warning'
+              ? "bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-300"
+              : "bg-rose-500/10 border-rose-500/20 text-rose-800 dark:text-rose-300"
+          )}>
+            <span className={cn(
+              "size-2 rounded-full mt-1.5 shrink-0 animate-pulse",
+              status.status === 'warning' ? "bg-amber-500" : "bg-rose-500"
+            )} />
+            <div className="flex-1 min-w-0">
+              <span className="font-bold text-[10px] uppercase tracking-wider block mb-0.5 opacity-80">
+                {status.status === 'warning' ? '项目配置警告' : '项目配置异常'}
+              </span>
+              <span className="text-xs leading-relaxed block font-medium">{detailText}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <StatusBadge
+              status={projectPath ? projectStatus : 'unknown'}
+              label={badgeLabel}
+            />
+            <span className="text-sm text-muted-foreground flex-1 min-w-0 truncate" title={detailText}>
+              {detailText}
+            </span>
+          </div>
+        )}
 
         <Separator />
 

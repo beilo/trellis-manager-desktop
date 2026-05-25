@@ -71,9 +71,7 @@ function projectHealth(status: ProjectStatus | undefined): Array<{ tone: HealthT
     })
   }
 
-  if (items.length === 0) {
-    items.push({ tone: 'ok', label: '正常', title: status.message })
-  }
+  // 正常状态不额外展示徽章，由左侧 StatusBadge 表达，避免挤占空间
 
   return items
 }
@@ -201,31 +199,39 @@ export function ProjectList({
                 >
                   <StatusBadge status={status} label={summary.label} className="px-2" />
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="flex min-w-0 items-center gap-2">
+                    {/* 第一行：项目名 + 活跃任务数 */}
+                    <div className="flex items-center justify-between gap-2">
                       <span className={cn(
                         'truncate text-sm font-semibold transition-colors duration-150',
                         selected ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'
                       )}>
                         {projectName(path)}
                       </span>
-                      <div className="flex min-w-0 shrink-0 flex-wrap gap-1">
-                        {health.map((item) => (
-                          <HealthPill
-                            key={`${path}-${item.label}`}
-                            tone={item.tone}
-                            label={item.label}
-                            title={item.title}
-                            dotClassName={item.tone === 'dirty' ? 'bg-orange-500' : undefined}
-                          />
-                        ))}
-                        {showCounts && (
+                      {showCounts && inProgressCount > 0 && (
+                        <div className="shrink-0">
                           <TaskCountPill count={inProgressCount} loading={taskCountsLoading && !counts} />
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
-                    <span className="truncate text-xs text-muted-foreground" title={`${path}\n${projectStatus?.message ?? '状态尚未加载'}`}>
-                      {path}
-                    </span>
+                    {/* 第二行：项目路径 + 健康状况徽章 */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-xs text-muted-foreground flex-1" title={`${path}\n${projectStatus?.message ?? '状态尚未加载'}`}>
+                        {path}
+                      </span>
+                      {health.length > 0 && (
+                        <div className="flex shrink-0 items-center gap-1">
+                          {health.map((item) => (
+                            <HealthPill
+                              key={`${path}-${item.label}`}
+                              tone={item.tone}
+                              label={item.label}
+                              title={item.title}
+                              dotClassName={item.tone === 'dirty' ? 'bg-orange-500' : undefined}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <Button
                     variant="ghost"

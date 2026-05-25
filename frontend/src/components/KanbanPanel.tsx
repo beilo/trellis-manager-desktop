@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { LayoutDashboard, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { AppInput } from './AppInput'
 import { KanbanTaskCard } from './KanbanTaskCard'
@@ -157,30 +157,38 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>规划中 {totalCounts.planning ?? 0}</CardTitle>
-          </CardHeader>
+        {/* 规划中 */}
+        <Card className="premium-card overflow-hidden border-l-[3.5px] border-l-slate-400">
+          <CardContent className="flex flex-col gap-1 px-4 py-3 select-none">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">规划中</span>
+            <span className="text-2xl font-extrabold tracking-tight text-foreground">{totalCounts.planning ?? 0}</span>
+          </CardContent>
         </Card>
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>进行中 {totalCounts.in_progress ?? 0}</CardTitle>
-          </CardHeader>
+        {/* 进行中 */}
+        <Card className="premium-card overflow-hidden border-l-[3.5px] border-l-blue-500">
+          <CardContent className="flex flex-col gap-1 px-4 py-3 select-none">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">进行中</span>
+            <span className="text-2xl font-extrabold tracking-tight text-foreground">{totalCounts.in_progress ?? 0}</span>
+          </CardContent>
         </Card>
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>已完成 {countDone(totalCounts)}</CardTitle>
-          </CardHeader>
+        {/* 已完成 */}
+        <Card className="premium-card overflow-hidden border-l-[3.5px] border-l-emerald-500">
+          <CardContent className="flex flex-col gap-1 px-4 py-3 select-none">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">已完成</span>
+            <span className="text-2xl font-extrabold tracking-tight text-foreground">{countDone(totalCounts)}</span>
+          </CardContent>
         </Card>
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>项目总数 {snapshot?.project_count ?? 0}</CardTitle>
-          </CardHeader>
+        {/* 项目总数 */}
+        <Card className="premium-card overflow-hidden border-l-[3.5px] border-l-violet-500">
+          <CardContent className="flex flex-col gap-1 px-4 py-3 select-none">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">项目总数</span>
+            <span className="text-2xl font-extrabold tracking-tight text-foreground">{snapshot?.project_count ?? 0}</span>
+          </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardContent className="flex flex-col gap-3">
+      <Card className="premium-card border-border/30 bg-card/65">
+        <CardContent className="flex flex-col gap-3 p-4">
           <div className="flex flex-wrap gap-2">
             {STATUS_FILTERS.map((filter) => (
               <Button
@@ -188,6 +196,7 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
                 type="button"
                 variant={statusFilter === filter.value ? 'default' : 'outline'}
                 size="sm"
+                className="transition-all duration-200"
                 onClick={() => setStatusFilter(filter.value)}
               >
                 {filter.label}
@@ -202,7 +211,7 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
               placeholder="搜索任务标题"
             />
             <select
-              className="h-8 rounded-lg border border-border bg-background px-2 text-sm"
+              className="h-8 rounded-lg border border-border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/25 transition-all duration-150"
               value={sortMode}
               onChange={(event) => setSortMode(event.target.value as SortMode)}
               aria-label="排序"
@@ -245,10 +254,10 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
             {(Object.keys(COLUMN_TITLES) as BoardColumn[]).map((column) => {
               const tasks = boardColumns[column]
               return (
-                <section key={column} className="flex min-h-0 flex-col gap-3 rounded-2xl border bg-card/70 p-3 shadow-sm">
-                  <div className="flex items-center justify-between gap-3">
+                <section key={column} className="flex min-h-0 flex-col gap-3 rounded-2xl border border-border/40 bg-card/65 p-3 shadow-sm">
+                  <div className="flex items-center justify-between gap-3 select-none">
                     <h3 className="text-sm font-semibold text-foreground">{COLUMN_TITLES[column]}</h3>
-                    <span className="shrink-0 text-xs text-muted-foreground">{tasks.length} 个任务</span>
+                    <span className="shrink-0 text-xs text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">{tasks.length} 个任务</span>
                   </div>
                   <ScrollArea className="h-[28rem]">
                     <div className="flex min-h-full flex-col gap-2 pr-2">
@@ -262,8 +271,8 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
                           />
                         ))
                       ) : (
-                        <div className="flex min-h-[10rem] items-center justify-center rounded-lg border border-dashed bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
-                          暂无任务
+                        <div className="flex min-h-[8rem] flex-col items-center justify-center rounded-xl border border-dashed border-border/30 bg-muted/5 px-4 py-8 text-center text-xs text-muted-foreground italic select-none">
+                          <span>暂无任务</span>
                         </div>
                       )}
                     </div>

@@ -83,7 +83,7 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {onOpenSettings && (
-            <Button variant="outline" size="icon-sm" onClick={onOpenSettings} title="工具链设置">
+            <Button variant="ghost" size="icon-sm" className="rounded-full text-muted-foreground hover:text-foreground" onClick={onOpenSettings} title="工具链设置">
               <Settings className="size-3.5" />
             </Button>
           )}
