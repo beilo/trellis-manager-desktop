@@ -40,17 +40,34 @@ const STATUS_CONFIG: Record<
     dot: 'bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.3)]',
     label: '提示',
   },
+  dirty: {
+    bg: 'bg-orange-500/10 dark:bg-orange-500/10',
+    border: 'border-orange-500/20 dark:border-orange-500/20',
+    text: 'text-orange-600 dark:text-orange-400',
+    dot: 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.4)]',
+    label: '未提交',
+  },
 }
 
 interface StatusBadgeProps {
   status: Status
   label?: string
   className?: string
+  variant?: 'badge' | 'dot'
 }
 
-export function StatusBadge({ status, label, className }: StatusBadgeProps) {
+export function StatusBadge({ status, label, className, variant = 'badge' }: StatusBadgeProps) {
   const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.unknown
   const text = label ?? config.label
+
+  if (variant === 'dot') {
+    return (
+      <span
+        className={cn('size-2 rounded-full shrink-0', config.dot, className)}
+        title={text}
+      />
+    )
+  }
 
   return (
     <span

@@ -1,4 +1,4 @@
-export type Status = 'ok' | 'warning' | 'error' | 'unknown' | 'info'
+export type Status = 'ok' | 'warning' | 'error' | 'unknown' | 'info' | 'dirty'
 
 export type TrellisTaskStatus =
   | 'planning'

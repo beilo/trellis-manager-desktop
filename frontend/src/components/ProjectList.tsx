@@ -3,87 +3,18 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { StatusBadge } from './StatusBadge'
-import type { ProjectStatus, ProjectTaskCounts } from '@/types'
+import type { ProjectStatus, ProjectTaskCounts, Status } from '@/types'
 
-type HealthTone = 'ok' | 'warning' | 'error' | 'unknown' | 'dirty'
 
-interface HealthPillProps {
-  tone: HealthTone
-  label: string
-  title: string
-  dotClassName?: string
-}
 
-function HealthPill({ tone, label, title, dotClassName }: HealthPillProps) {
-  const classes: Record<HealthTone, string> = {
-    ok: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    warning: 'border-amber-200 bg-amber-50 text-amber-700',
-    error: 'border-rose-200 bg-rose-50 text-rose-700',
-    unknown: 'border-slate-200 bg-slate-50 text-slate-600',
-    dirty: 'border-orange-200 bg-orange-50 text-orange-700',
-  }
-
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold',
-        classes[tone],
-      )}
-      title={title}
-    >
-      {dotClassName ? <span className={cn('size-1.5 rounded-full', dotClassName)} /> : null}
-      {label}
-    </span>
-  )
-}
-
-function compactVersion(value: string | null): string {
-  if (!value) return 'v-'
-  return value.startsWith('v') ? value : `v${value}`
-}
-
-// 只使用现有 ProjectStatus 字段生成紧凑健康指示，避免引入额外任务请求。
-function projectHealth(status: ProjectStatus | undefined): Array<{ tone: HealthTone; label: string; title: string }> {
-  if (!status) {
-    return [{ tone: 'unknown', label: '未检查', title: '项目状态尚未加载' }]
-  }
-
-  const items: Array<{ tone: HealthTone; label: string; title: string }> = []
-  if (!status.has_trellis) {
-    items.push({ tone: 'warning', label: '未 init', title: status.message })
-  } else if (status.version_outdated) {
-    const current = status.trellis_version ?? '-'
-    const latest = status.latest_version ?? '-'
-    items.push({
-      tone: 'warning',
-      label: `${compactVersion(status.trellis_version)}→${compactVersion(status.latest_version)}`,
-      title: status.latest_version
-        ? `当前 ${current}，最新 ${latest}`
-        : status.message,
-    })
-  }
-
-  if (status.dirty) {
-    items.push({
-      tone: 'dirty',
-      label: 'dirty',
-      title: '项目工作区存在未提交修改',
-    })
-  }
-
-  // 正常状态不额外展示徽章，由左侧 StatusBadge 表达，避免挤占空间
-
-  return items
-}
-
-function projectLabel(status: ProjectStatus | undefined): { label: string } {
-  if (!status) return { label: '未检查' }
-  if (!status.exists) return { label: '不存在' }
-  if (!status.is_git) return { label: '非 Git' }
-  if (!status.has_trellis) return { label: '未初始化' }
-  if (status.version_outdated) return { label: '版本过期' }
-  if (status.dirty) return { label: 'Dirty' }
-  return { label: '正常' }
+function getProjectDisplayStatus(status: ProjectStatus | undefined): Status {
+  if (!status) return 'unknown'
+  if (!status.exists) return 'error'
+  if (!status.is_git) return 'error'
+  if (!status.has_trellis) return 'info' // 未初始化用 info (蓝色)
+  if (status.version_outdated) return 'warning' // 版本过期用 warning (黄色)
+  if (status.dirty) return 'dirty' // dirty 用 dirty (橙色)
+  return 'ok' // 正常用 ok (绿色)
 }
 
 function TaskCountPill({ count, loading }: { count: number; loading: boolean }) {
@@ -174,9 +105,7 @@ export function ProjectList({
             {projects.map((path) => {
               const selected = path === selectedProject
               const projectStatus = statuses[path]
-              const status = projectStatus?.status ?? 'unknown'
-              const health = projectHealth(projectStatus)
-              const summary = projectLabel(projectStatus)
+              const displayStatus = getProjectDisplayStatus(projectStatus)
               const counts = taskCounts[path]
               const showCounts = Boolean(counts) || Boolean(projectStatus?.has_trellis)
               const inProgressCount = counts?.in_progress ?? 0
@@ -190,53 +119,42 @@ export function ProjectList({
                     if (event.key === 'Enter' || event.key === ' ') onSelect(path)
                   }}
                   className={cn(
-                    'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-left cursor-pointer',
+                    'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-left cursor-pointer',
                     'transition-all duration-150 border border-transparent border-l-[3px]',
                     selected
                       ? 'bg-blue-50/70 dark:bg-blue-950/25 border-blue-500/5 dark:border-blue-500/10 border-l-blue-500 shadow-[0_2px_8px_rgba(59,130,246,0.04)]'
                       : 'border-l-transparent hover:bg-muted/65 hover:border-border/10',
                   )}
                 >
-                  <StatusBadge status={status} label={summary.label} className="px-2" />
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    {/* 第一行：项目名 + 活跃任务数 */}
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5 pr-6">
+                    {/* 第一行：状态点 + 项目名 + 活跃任务数 */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className={cn(
-                        'truncate text-sm font-semibold transition-colors duration-150',
-                        selected ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'
-                      )}>
-                        {projectName(path)}
-                      </span>
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <StatusBadge status={displayStatus} variant="dot" className="mt-0.5" />
+                        <span className={cn(
+                          'truncate text-sm font-semibold transition-colors duration-150',
+                          selected ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'
+                        )}>
+                          {projectName(path)}
+                        </span>
+                      </div>
                       {showCounts && inProgressCount > 0 && (
                         <div className="shrink-0">
                           <TaskCountPill count={inProgressCount} loading={taskCountsLoading && !counts} />
                         </div>
                       )}
                     </div>
-                    {/* 第二行：项目路径 + 健康状况徽章 */}
+                    {/* 第二行：项目路径 */}
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-xs text-muted-foreground flex-1" title={`${path}\n${projectStatus?.message ?? '状态尚未加载'}`}>
                         {path}
                       </span>
-                      {health.length > 0 && (
-                        <div className="flex shrink-0 items-center gap-1">
-                          {health.map((item) => (
-                            <HealthPill
-                              key={`${path}-${item.label}`}
-                              tone={item.tone}
-                              label={item.label}
-                              title={item.title}
-                              dotClassName={item.tone === 'dirty' ? 'bg-orange-500' : undefined}
-                            />
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="size-7 shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 size-7 shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-150 rounded-full"
                     onClick={(event) => {
                       event.stopPropagation()
                       onRemove(path)
