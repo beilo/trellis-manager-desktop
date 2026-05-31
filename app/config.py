@@ -20,6 +20,9 @@ MAX_OPERATION_LOGS = 80
 
 PATH_EXPORT_LINE = 'export PATH="$HOME/.beilo-trellis/bin:$PATH"'
 
+# 初始化平台合法 key 集合，供 config 与 ops 复用。
+VALID_INIT_PLATFORMS = {"claude-code", "codex", "cursor"}
+
 
 @dataclass(frozen=True)
 class ManagerConfig:
@@ -30,6 +33,9 @@ class ManagerConfig:
     official_repo_url: str = OFFICIAL_REPO_URL
     accelerated_repo_url: str = ACCELERATED_REPO_URL
     distribution_branch: str = DISTRIBUTION_BRANCH
+    # 初始化前置配置（全局单值，所有项目通用）
+    developer_name: str = ""
+    init_platforms: list[str] = field(default_factory=list)
 
 
 def _path_from_json(value: object, fallback: Path) -> Path:
@@ -43,6 +49,26 @@ def _str_from_json(value: object, fallback: str) -> str:
     if not isinstance(value, str) or not value.strip():
         return fallback
     return value.strip()
+
+
+# 开发者名清理：strip 后允许空，由阻断逻辑决定是否合法。
+def _clean_name(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip()
+
+
+# 平台列表清理：仅保留合法 key、去重、保持顺序。
+def _clean_platforms(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in value:
+        if isinstance(item, str) and item in VALID_INIT_PLATFORMS and item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
 
 
 # 只序列化已知配置字段，避免以后迁移时丢失语义或把内部结构写进 JSON。
@@ -59,6 +85,8 @@ def _config_payload(config: ManagerConfig) -> dict[str, object]:
         "official_repo_url": config.official_repo_url,
         "accelerated_repo_url": config.accelerated_repo_url,
         "distribution_branch": config.distribution_branch,
+        "developer_name": config.developer_name,
+        "init_platforms": config.init_platforms,
     }
 
 
@@ -122,6 +150,12 @@ def load_config(config_file: Path = CONFIG_FILE) -> ManagerConfig:
         data.get("distribution_branch") if isinstance(data, dict) else None,
         DISTRIBUTION_BRANCH,
     )
+    developer_name = _clean_name(
+        data.get("developer_name") if isinstance(data, dict) else None,
+    )
+    init_platforms = _clean_platforms(
+        data.get("init_platforms") if isinstance(data, dict) else None,
+    )
     deduped_projects = _dedupe_paths(projects)
     project_keys = {str(path.expanduser()) for path in deduped_projects}
     if last_selected and str(last_selected.expanduser()) not in project_keys:
@@ -134,6 +168,8 @@ def load_config(config_file: Path = CONFIG_FILE) -> ManagerConfig:
         official_repo_url=official_repo_url,
         accelerated_repo_url=accelerated_repo_url,
         distribution_branch=distribution_branch,
+        developer_name=developer_name,
+        init_platforms=init_platforms,
     )
 
 
@@ -156,6 +192,8 @@ def remember_project(project_dir: Path, config_file: Path = CONFIG_FILE) -> Mana
         official_repo_url=config.official_repo_url,
         accelerated_repo_url=config.accelerated_repo_url,
         distribution_branch=config.distribution_branch,
+        developer_name=config.developer_name,
+        init_platforms=config.init_platforms,
     )
     save_config(updated, config_file)
     return updated
@@ -180,6 +218,8 @@ def save_projects(
         official_repo_url=config.official_repo_url,
         accelerated_repo_url=config.accelerated_repo_url,
         distribution_branch=config.distribution_branch,
+        developer_name=config.developer_name,
+        init_platforms=config.init_platforms,
     )
     save_config(updated, config_file)
     return updated
@@ -196,6 +236,8 @@ def add_project(project_dir: Path, config_file: Path = CONFIG_FILE) -> ManagerCo
         official_repo_url=config.official_repo_url,
         accelerated_repo_url=config.accelerated_repo_url,
         distribution_branch=config.distribution_branch,
+        developer_name=config.developer_name,
+        init_platforms=config.init_platforms,
     )
     save_config(updated, config_file)
     return updated
@@ -216,6 +258,8 @@ def remove_project(project_dir: Path, config_file: Path = CONFIG_FILE) -> Manage
         official_repo_url=config.official_repo_url,
         accelerated_repo_url=config.accelerated_repo_url,
         distribution_branch=config.distribution_branch,
+        developer_name=config.developer_name,
+        init_platforms=config.init_platforms,
     )
     save_config(updated, config_file)
     return updated
@@ -235,17 +279,21 @@ def save_selected_project(project_dir: Path | None, config_file: Path = CONFIG_F
         official_repo_url=config.official_repo_url,
         accelerated_repo_url=config.accelerated_repo_url,
         distribution_branch=config.distribution_branch,
+        developer_name=config.developer_name,
+        init_platforms=config.init_platforms,
     )
     save_config(updated, config_file)
     return updated
 
 
-def get_settings(config_file: Path = CONFIG_FILE) -> dict[str, str]:
+def get_settings(config_file: Path = CONFIG_FILE) -> dict[str, object]:
     config = load_config(config_file)
     return {
         "official_repo_url": config.official_repo_url,
         "accelerated_repo_url": config.accelerated_repo_url,
         "distribution_branch": config.distribution_branch,
+        "developer_name": config.developer_name,
+        "init_platforms": config.init_platforms,
     }
 
 
@@ -260,6 +308,8 @@ def save_settings(partial: dict[str, object], config_file: Path = CONFIG_FILE) -
         official_repo_url=_str_from_json(partial.get("official_repo_url"), config.official_repo_url),
         accelerated_repo_url=_str_from_json(partial.get("accelerated_repo_url"), config.accelerated_repo_url),
         distribution_branch=_str_from_json(partial.get("distribution_branch"), config.distribution_branch),
+        developer_name=_clean_name(partial.get("developer_name")) if "developer_name" in partial else config.developer_name,
+        init_platforms=_clean_platforms(partial.get("init_platforms")) if "init_platforms" in partial else config.init_platforms,
     )
     save_config(updated, config_file)
     return updated

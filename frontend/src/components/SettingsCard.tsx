@@ -11,7 +11,16 @@ const DEFAULT_SETTINGS: ManagerSettings = {
   official_repo_url: 'https://github.com/beilo/Trellis.git',
   accelerated_repo_url: 'https://xget.xi-xu.me/gh/beilo/Trellis.git',
   distribution_branch: 'custom/beilo-v0.5-rc',
+  developer_name: '',
+  init_platforms: [],
 }
+
+// 平台候选（key 与后端 VALID_INIT_PLATFORMS 对齐）
+const PLATFORM_OPTIONS: readonly { key: string; label: string }[] = [
+  { key: 'claude-code', label: 'Claude Code' },
+  { key: 'codex', label: 'Codex' },
+  { key: 'cursor', label: 'Cursor' },
+]
 
 interface SettingsCardProps {
   repoPath: string
@@ -29,7 +38,13 @@ function validateSettings(settings: ManagerSettings): string | null {
   ] as const) {
     if (!/^https?:\/\/.+/.test(value.trim())) return `${label} 必须是 http(s) URL。`
   }
+  if (!settings.developer_name.trim()) return '开发者名不能为空。'
+  if (settings.init_platforms.length === 0) return '请至少选择一个初始化平台。'
   return null
+}
+
+function togglePlatform(current: string[], key: string): string[] {
+  return current.includes(key) ? current.filter((k) => k !== key) : [...current, key]
 }
 
 export function SettingsCard({ repoPath, onSaved, onClose }: SettingsCardProps) {
@@ -127,6 +142,36 @@ export function SettingsCard({ repoPath, onSaved, onClose }: SettingsCardProps) 
           />
         </label>
 
+        <div className="h-px bg-border" />
+
+        <label className="grid gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">开发者名</span>
+          <AppInput
+            value={settings.developer_name}
+            onChange={(event) => setSettings((current) => ({ ...current, developer_name: event.target.value }))}
+            placeholder="输入开发者名，用于 tl init -u"
+          />
+        </label>
+        <div className="grid gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">初始化平台</span>
+          <div className="flex flex-wrap gap-2">
+            {PLATFORM_OPTIONS.map(({ key, label }) => {
+              const selected = settings.init_platforms.includes(key)
+              return (
+                <Button
+                  key={key}
+                  type="button"
+                  variant={selected ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSettings((current) => ({ ...current, init_platforms: togglePlatform(current.init_platforms, key) }))}
+                >
+                  {label}
+                </Button>
+              )
+            })}
+          </div>
+        </div>
+
         {feedback && (
           <div className={`rounded-lg border px-3 py-2 text-sm ${feedback.ok ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-destructive/30 bg-destructive/10 text-destructive'}`}>
             {feedback.message}
@@ -139,7 +184,8 @@ export function SettingsCard({ repoPath, onSaved, onClose }: SettingsCardProps) 
             variant="outline"
             onClick={() => {
               if (window.confirm('恢复默认仓库 URL 和分发分支？')) {
-                void save(DEFAULT_SETTINGS)
+                // 只重置 URL/分支，保留开发者名与平台选择，避免误清空前置配置被校验卡死。
+                void save({ ...settings, official_repo_url: DEFAULT_SETTINGS.official_repo_url, accelerated_repo_url: DEFAULT_SETTINGS.accelerated_repo_url, distribution_branch: DEFAULT_SETTINGS.distribution_branch })
               }
             }}
             disabled={saving}

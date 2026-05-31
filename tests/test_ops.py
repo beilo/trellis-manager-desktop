@@ -28,6 +28,7 @@ from app.config import (  # noqa: E402
 from app.ops import (  # noqa: E402
     OperationError,
     accelerated_clone_url,
+    check_developer_config,
     check_helm_status,
     check_tool_repo,
     ensure_wrappers_and_path,
@@ -185,7 +186,7 @@ class TrellisManagerOpsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             bin_dir = Path(tmp) / "bin"
 
-            self.assertEqual(project_init_command(bin_dir), [str(bin_dir / "tl"), "init", "-y"])
+            self.assertEqual(project_init_command(["claude-code", "cursor"], "alice", bin_dir), [str(bin_dir / "tl"), "init", "-y", "--claude", "--cursor", "-u", "alice"])
             self.assertEqual(project_update_command(bin_dir), [str(bin_dir / "tl"), "update", "--force"])
             self.assertEqual(project_update_preview_command(bin_dir), [str(bin_dir / "tl"), "update", "--force", "--dry-run"])
             self.assertEqual(accelerated_clone_url(), "https://xget.xi-xu.me/gh/beilo/Trellis.git")
@@ -321,21 +322,21 @@ class TrellisManagerOpsTest(unittest.TestCase):
             project.mkdir()
             runner = FakeRunner()
 
-            report = init_project(project, runner, bin_dir)  # type: ignore[arg-type]
+            report = init_project(project, ["claude-code"], "alice", runner, bin_dir)  # type: ignore[arg-type]
 
             self.assertTrue(report.ok)
             self.assertIn("force update", report.message)
             self.assertEqual(
                 [command.command for command in report.commands],
                 [
-                    [str(bin_dir / "tl"), "init", "-y"],
+                    [str(bin_dir / "tl"), "init", "-y", "--claude", "-u", "alice"],
                     [str(bin_dir / "tl"), "update", "--force"],
                 ],
             )
             self.assertEqual(
                 [call[0] for call in runner.calls if call[0][:1] == [str(bin_dir / "tl")]],
                 [
-                    [str(bin_dir / "tl"), "init", "-y"],
+                    [str(bin_dir / "tl"), "init", "-y", "--claude", "-u", "alice"],
                     [str(bin_dir / "tl"), "update", "--force"],
                 ],
             )
@@ -775,6 +776,8 @@ class TrellisManagerOpsTest(unittest.TestCase):
                     "official_repo_url": "https://example.com/official.git",
                     "accelerated_repo_url": "https://example.com/mirror.git",
                     "distribution_branch": "release/one",
+                    "developer_name": "",
+                    "init_platforms": [],
                 },
             )
 
@@ -854,6 +857,121 @@ class TrellisManagerOpsTest(unittest.TestCase):
     def test_launcher_checks_homebrew_python_candidates(self) -> None:
         self.assertIn("/opt/homebrew/bin/python3", launcher.PYTHON_CANDIDATES)
         self.assertIn("/usr/local/bin/python3", launcher.PYTHON_CANDIDATES)
+
+    # ── 初始化前置配置校验测试 ──
+
+    def test_init_project_blocks_on_empty_developer_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            project.mkdir()
+            runner = FakeRunner()
+            # git 仓库条件满足（FakeRunner 默认 git ok）
+            with self.assertRaises(OperationError) as error:
+                init_project(project, ["claude-code"], "", runner)  # type: ignore[arg-type]
+            self.assertIn("开发者名", str(error.exception))
+            # runner 不应被调用
+            self.assertEqual(
+                [c for c in runner.calls if c[0][0:1] == [str(project)]],
+                [],
+            )
+
+    def test_init_project_blocks_on_empty_platforms(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            project.mkdir()
+            runner = FakeRunner()
+            with self.assertRaises(OperationError) as error:
+                init_project(project, [], "alice", runner)  # type: ignore[arg-type]
+            self.assertIn("平台", str(error.exception))
+            self.assertEqual(
+                [c for c in runner.calls if c[0][0:1] == [str(project)]],
+                [],
+            )
+
+    def test_check_developer_config_ok_when_both_set(self) -> None:
+        item = check_developer_config("alice", ["claude-code", "cursor"])
+        self.assertTrue(item.ok)
+        self.assertEqual(item.status, "ok")
+        self.assertIn("alice", item.message)
+        self.assertIn("Claude Code", item.message)
+        self.assertIn("Cursor", item.message)
+
+    def test_check_developer_config_error_when_missing_name(self) -> None:
+        item = check_developer_config("", ["claude-code"])
+        self.assertFalse(item.ok)
+        self.assertEqual(item.status, "error")
+        self.assertIn("开发者名", item.message)
+
+    def test_check_developer_config_error_when_missing_platforms(self) -> None:
+        item = check_developer_config("alice", [])
+        self.assertFalse(item.ok)
+        self.assertEqual(item.status, "error")
+        self.assertIn("平台", item.message)
+
+    def test_check_developer_config_error_when_both_missing(self) -> None:
+        item = check_developer_config("", [])
+        self.assertFalse(item.ok)
+        self.assertIn("开发者名", item.message)
+        self.assertIn("平台", item.message)
+
+    def test_config_roundtrip_with_new_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_file = Path(tmp) / "config.json"
+            config = ManagerConfig(
+                trellis_repo=Path(tmp),
+                projects=[],
+                developer_name="alice",
+                init_platforms=["claude-code", "cursor"],
+            )
+            save_config(config, config_file)
+            loaded = load_config(config_file)
+            self.assertEqual(loaded.developer_name, "alice")
+            self.assertEqual(loaded.init_platforms, ["claude-code", "cursor"])
+
+    def test_config_loads_old_format_without_new_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_file = Path(tmp) / "config.json"
+            config_file.write_text(
+                json.dumps({"trellis_repo": str(Path(tmp) / "Trellis")}),
+                encoding="utf-8",
+            )
+            loaded = load_config(config_file)
+            self.assertEqual(loaded.developer_name, "")
+            self.assertEqual(loaded.init_platforms, [])
+
+    def test_config_filters_invalid_platform_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_file = Path(tmp) / "config.json"
+            config_file.write_text(
+                json.dumps({
+                    "trellis_repo": str(Path(tmp) / "Trellis"),
+                    "init_platforms": ["claude-code", "invalid", "codex"],
+                }),
+                encoding="utf-8",
+            )
+            loaded = load_config(config_file)
+            self.assertEqual(loaded.init_platforms, ["claude-code", "codex"])
+
+    def test_save_settings_preserves_new_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_file = Path(tmp) / "config.json"
+            save_config(
+                ManagerConfig(trellis_repo=Path(tmp), developer_name="alice", init_platforms=["codex"]),
+                config_file,
+            )
+            updated = save_settings(
+                {"official_repo_url": "https://example.com/repo.git",
+                 "accelerated_repo_url": "https://mirror.example.com/repo.git",
+                 "distribution_branch": "main",
+                 "developer_name": "bob",
+                 "init_platforms": ["claude-code", "cursor"]},
+                config_file,
+            )
+            self.assertEqual(updated.developer_name, "bob")
+            self.assertEqual(updated.init_platforms, ["claude-code", "cursor"])
+            loaded = load_config(config_file)
+            self.assertEqual(loaded.developer_name, "bob")
+            self.assertEqual(loaded.init_platforms, ["claude-code", "cursor"])
 
 
 if __name__ == "__main__":

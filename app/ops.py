@@ -188,8 +188,22 @@ def cli_entry_path(repo_dir: Path = DEFAULT_REPO_DIR) -> Path:
     return repo_dir / "packages" / "cli" / "bin" / "trellis.js"
 
 
-def project_init_command(bin_dir: Path = DEFAULT_BIN_DIR) -> list[str]:
-    return [str(wrapper_path("tl", bin_dir)), "init", "-y"]
+def project_init_command(
+    platforms: list[str],
+    developer_name: str,
+    bin_dir: Path = DEFAULT_BIN_DIR,
+) -> list[str]:
+    # 平台 key → CLI flag 映射（固定三项，与 config.VALID_INIT_PLATFORMS 对齐）。
+    _PLATFORM_FLAGS = {
+        "claude-code": "--claude",
+        "codex": "--codex",
+        "cursor": "--cursor",
+    }
+    cmd = [str(wrapper_path("tl", bin_dir)), "init", "-y"]
+    for key in platforms:
+        cmd.append(_PLATFORM_FLAGS[key])
+    cmd += ["-u", developer_name]
+    return cmd
 
 
 def project_update_command(bin_dir: Path = DEFAULT_BIN_DIR) -> list[str]:
@@ -751,19 +765,62 @@ def inspect_project(
     )
 
 
+def check_developer_config(
+    developer_name: str,
+    platforms: list[str],
+) -> EnvironmentItem:
+    """检查初始化前置配置是否齐全，供环境面板展示。"""
+    missing: list[str] = []
+    if not developer_name.strip():
+        missing.append("开发者名")
+    if not platforms:
+        missing.append("初始化平台")
+    if missing:
+        return EnvironmentItem(
+            "开发者配置",
+            False,
+            "error",
+            f"未配置：{'、'.join(missing)}。请在设置中填写并选择初始化平台。",
+        )
+    labels = "、".join(
+        _PLATFORM_LABELS.get(k, k) for k in platforms
+    )
+    return EnvironmentItem(
+        "开发者配置",
+        True,
+        "ok",
+        f"开发者 {developer_name}，平台：{labels}。",
+    )
+
+
+# 平台 key → 中文标签（与 INIT_PLATFORMS 对齐，仅供检查项输出）。
+_PLATFORM_LABELS = {
+    "claude-code": "Claude Code",
+    "codex": "Codex",
+    "cursor": "Cursor",
+}
+
+
 def init_project(
     project_dir: Path,
+    platforms: list[str],
+    developer_name: str,
     runner: CommandRunner | None = None,
     bin_dir: Path = DEFAULT_BIN_DIR,
 ) -> OperationReport:
     runner = runner or CommandRunner()
+    # 前置配置阻断：名字空或平台空时拒绝 init，避免生成无效配置。
+    if not developer_name.strip():
+        raise OperationError("未配置开发者名，请在设置中填写后再初始化。")
+    if not platforms:
+        raise OperationError("未选择初始化平台，请在设置中至少选择一个平台。")
     status = inspect_project(str(project_dir), runner)
     if not status.is_git:
         raise OperationError("目标项目必须是 git 仓库。")
     if status.has_trellis:
         raise OperationError("目标项目已经存在 .trellis，请使用 update。")
     commands: list[CommandResult] = []
-    init_result = runner.run(project_init_command(bin_dir), cwd=status.path, timeout=300)
+    init_result = runner.run(project_init_command(platforms, developer_name.strip(), bin_dir), cwd=status.path, timeout=300)
     commands.append(init_result)
     _raise_if_failed(init_result, "项目 init 失败。", commands)
     # init 遇到已有 AGENTS.md 会保留旧文件，随后强制 update 让团队模板覆盖到位。

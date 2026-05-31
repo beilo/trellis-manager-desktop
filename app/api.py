@@ -25,6 +25,7 @@ from app.config import (
 from app.file_reader import FileReadError, SafeFileReader, TextFileResult
 from app import watcher as file_watcher
 from app.ops import (
+    check_developer_config,
     check_helm_status,
     check_environment,
     check_tool_repo,
@@ -115,6 +116,8 @@ class TrellisAPI:
             official_repo_url=self._settings["official_repo_url"],
             accelerated_repo_url=self._settings["accelerated_repo_url"],
             distribution_branch=self._settings["distribution_branch"],
+            developer_name=self._config.developer_name,
+            init_platforms=self._config.init_platforms,
         )
         if self._config_file:
             save_config(self._config, self._config_file)
@@ -185,6 +188,8 @@ class TrellisAPI:
 
     def check_environment(self) -> list[dict[str, Any]]:
         items = check_environment(self._runner)
+        # 开发者配置检查项追加到系统依赖列表末尾。
+        items.append(check_developer_config(self._config.developer_name, self._config.init_platforms))
         return [dataclass_to_dict(item) for item in items]
 
     def check_tool_repo(self, path: str) -> dict[str, Any]:
@@ -283,7 +288,12 @@ class TrellisAPI:
         return dataclass_to_dict(status)
 
     def init_project(self, path: str) -> dict[str, Any]:
-        report = init_project(Path(path).expanduser(), self._runner)
+        report = init_project(
+            Path(path).expanduser(),
+            self._config.init_platforms,
+            self._config.developer_name,
+            self._runner,
+        )
         return report.to_log_entry()
 
     def update_project(self, path: str, allow_dirty: bool = False) -> dict[str, Any]:

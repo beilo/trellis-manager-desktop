@@ -162,6 +162,8 @@ export interface ManagerSettings {
   official_repo_url: string
   accelerated_repo_url: string
   distribution_branch: string
+  developer_name: string
+  init_platforms: string[]
 }
 
 export interface ManagerConfig extends ManagerSettings {
