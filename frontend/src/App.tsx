@@ -129,6 +129,7 @@ export default function App() {
   const [repoStatus, setRepoStatus] = useState<RepoStatus | null>(null)
   const [repoLoading, setRepoLoading] = useState(false)
   const [repoBusy, setRepoBusy] = useState(false)
+  const [githubBranchUrl, setGithubBranchUrl] = useState<string | null>(null)
 
   // 命令入口
   const [cmdItems, setCmdItems] = useState<ToolCommandStatus[]>([])
@@ -295,6 +296,21 @@ export default function App() {
       checkRepoInner(repoPath)
     } catch (err) {
       addLog('error', `失败：下载/更新 - ${err}`)
+    } finally {
+      setRepoBusy(false)
+    }
+  }, [repoPath, addLog, addLogs, checkRepoInner])
+
+  const handleInstallFromZip = useCallback(async (zipPath: string, replace: boolean) => {
+    setRepoBusy(true)
+    addLog('task', replace ? '== 从本地 zip 重装工具仓库 ==' : '== 从本地 zip 安装工具仓库 ==')
+    try {
+      await api.saveRepoPath(repoPath)
+      const report = await api.installFromZip(zipPath, repoPath, replace)
+      addLogs(...reportToLogs(report))
+      checkRepoInner(repoPath)
+    } catch (err) {
+      addLog('error', `失败：本地 zip 安装 - ${err}`)
     } finally {
       setRepoBusy(false)
     }
@@ -641,14 +657,16 @@ export default function App() {
 
     void (async () => {
       try {
-        const [pi, cfg, logs] = await Promise.all([
+        const [pi, cfg, logs, branchUrl] = await Promise.all([
           api.getPlatformInfo(),
           api.getConfig(),
           api.getLogs(),
+          api.getGithubBranchUrl().catch(() => null),
         ])
 
         setPlatformInfo(pi)
         setRepoPath(cfg.trellis_repo)
+        setGithubBranchUrl(branchUrl)
 
         const initialProjects = dedupeProjects(
           cfg.projects.length > 0 ? cfg.projects : cfg.recent_projects,
@@ -720,8 +738,8 @@ export default function App() {
         {activeTab === 'toolchain' ? (
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
             <div className="flex flex-col gap-1 px-1">
-              <h2 className="text-base font-bold tracking-tight text-foreground flex items-center gap-2 select-none">
-                <Wrench className="size-4 text-blue-500" />
+              <h2 className="text-lg font-serif font-normal tracking-tight text-foreground flex items-center gap-2 select-none">
+                <Wrench className="size-4 text-primary" />
                 <span>工具链基石</span>
               </h2>
               <p className="text-xs text-muted-foreground select-none">
@@ -742,8 +760,10 @@ export default function App() {
               busy={repoBusy}
               onCheck={handleCheckRepo}
               onInstall={handleInstallRepo}
+              onInstallFromZip={handleInstallFromZip}
               onCreateWrappers={handleCreateWrappers}
               onPathChange={setRepoPath}
+              githubBranchUrl={githubBranchUrl}
             />
 
             <SettingsCard
@@ -778,8 +798,8 @@ export default function App() {
 
             <div className="flex flex-col gap-5">
               <div className="flex flex-col gap-1 px-1">
-                <h2 className="text-base font-bold tracking-tight text-foreground flex items-center gap-2 select-none">
-                  <FolderGit2 className="size-4 text-emerald-500" />
+                <h2 className="text-lg font-serif font-normal tracking-tight text-foreground flex items-center gap-2 select-none">
+                  <FolderGit2 className="size-4 text-primary" />
                   <span>业务项目中心</span>
                 </h2>
                 <p className="text-xs text-muted-foreground select-none">

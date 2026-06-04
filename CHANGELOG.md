@@ -4,6 +4,12 @@
 
 ### Added
 
+- **本地源码 zip 安装**：工具链页新增「本地源码 zip 安装」区域，支持从本地 zip 文件安装/重装 Trellis 工具源码，无需 GitHub 访问。
+  - 后端新增 `is_valid_source_tree` 验证源码树（不依赖 `.git`）、`_safe_extract_zip` 安全解压（拒绝路径遍历）、`install_from_zip` 安装/重装（备份-交换-清理策略）
+  - 后端新增 `github_branch_url` 从仓库 URL 推导 GitHub 分支页面链接
+  - `check_tool_repo` 扩展 `source_type` 字段（git/zip_snapshot/invalid/missing），zip 快照显示独立状态文案，不执行 `git fetch`
+  - 前端 `RepoCard` 新增「打开分发分支」外链、「本地源码 zip 安装」输入框与安装/重装按钮，zip 快照状态下禁用 Git 更新按钮
+  - 前端 `App` 新增 `handleInstallFromZip` 处理 zip 安装流程
 - **Manager P3 批量 Update 与配置页**：项目列表新增批量 Update 入口与结果对话框，工具链页新增设置齿轮，配置页复用现有 settings API 并支持 URL / 分支校验、恢复默认和保存持久化。
 - **前端文件监听自动刷新**：接入 `window.onTrellisFileChange`，任务变更自动刷新当前项目任务管理与跨项目看板，版本变更自动刷新当前项目健康状态，并保留旧后端 no-op 降级。
 - **Manager 批量项目更新 API**：新增落后项目筛选、批量更新聚合结果、dirty 默认跳过、单项失败继续执行、单条聚合 operation log、pywebview 桥接与前端类型/API 包装，并补充后端与桥接单元测试。

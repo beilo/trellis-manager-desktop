@@ -73,6 +73,8 @@ export interface EnvironmentItem {
   version: string | null
 }
 
+export type SourceType = 'git' | 'zip_snapshot' | 'invalid' | 'missing'
+
 export interface RepoStatus {
   path: string
   exists: boolean
@@ -86,6 +88,7 @@ export interface RepoStatus {
   behind: number | null
   status: Status
   message: string
+  source_type?: SourceType
 }
 
 export interface ProjectStatus {

@@ -45,6 +45,8 @@ interface PywebviewAPI {
   check_tool_repo(path: string): Promise<RepoStatus>
   check_wrapper_commands(): Promise<ToolCommandStatus[]>
   install_or_update_tool_repo(path: string): Promise<OperationReport>
+  install_from_zip?(zip_path: string, repo_path: string, replace?: boolean): Promise<OperationReport>
+  get_github_branch_url?(): Promise<string | null>
   ensure_wrappers_and_path(path: string): Promise<OperationReport>
   inspect_project(path: string): Promise<ProjectStatus>
   get_project_git_summary(path: string): Promise<GitSummary>
@@ -57,6 +59,7 @@ interface PywebviewAPI {
   get_recent_projects(): Promise<string[]>
   get_logs(): Promise<OperationLogEntry[]>
   select_directory(): Promise<string | null>
+  select_file?(file_types?: [string, string]): Promise<string | null>
   open_directory(path: string): Promise<void>
   open_in_iterm(path: string): Promise<void>
   open_in_cursor?: (path: string) => Promise<void>
@@ -226,6 +229,22 @@ export const api = {
     return (await getApi()).install_or_update_tool_repo(path)
   },
 
+  async installFromZip(zipPath: string, repoPath: string, replace: boolean = false): Promise<OperationReport> {
+    const bridge = await getApi()
+    if (typeof bridge.install_from_zip !== 'function') {
+      throw new Error('当前后端未提供本地 zip 安装接口。')
+    }
+    return bridge.install_from_zip(zipPath, repoPath, replace)
+  },
+
+  async getGithubBranchUrl(): Promise<string | null> {
+    const bridge = await getApi()
+    if (typeof bridge.get_github_branch_url !== 'function') {
+      return null
+    }
+    return bridge.get_github_branch_url()
+  },
+
   async ensureWrappersAndPath(path: string): Promise<OperationReport> {
     return (await getApi()).ensure_wrappers_and_path(path)
   },
@@ -272,6 +291,14 @@ export const api = {
 
   async selectDirectory(): Promise<string | null> {
     return (await getApi()).select_directory()
+  },
+
+  async selectFile(): Promise<string | null> {
+    const bridge = await getApi()
+    if (typeof bridge.select_file !== 'function') {
+      throw new Error('当前后端未提供文件选择接口。')
+    }
+    return bridge.select_file()
   },
 
   async openDirectory(path: string): Promise<void> {

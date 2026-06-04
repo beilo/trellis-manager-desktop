@@ -33,8 +33,10 @@ from app.ops import (
     dataclass_to_dict,
     ensure_wrappers_and_path,
     get_project_git_summary as get_project_git_summary_op,
+    github_branch_url,
     init_project,
     inspect_project,
+    install_from_zip,
     install_or_update_tool_repo,
     is_supported_macos,
     preview_project_update as preview_project_update_op,
@@ -277,6 +279,24 @@ class TrellisAPI:
         )
         return report.to_log_entry()
 
+    def install_from_zip(self, zip_path: str, repo_path: str, replace: bool = False) -> dict[str, Any]:
+        """从本地 zip 安装或重装 Trellis 工具源码。"""
+        report = install_from_zip(
+            Path(zip_path).expanduser(),
+            Path(repo_path).expanduser(),
+            replace=replace,
+            distribution_branch=self._settings["distribution_branch"],
+            runner=self._runner,
+        )
+        return report.to_log_entry()
+
+    def get_github_branch_url(self) -> str | None:
+        """返回当前配置对应的 GitHub 分支页面链接。"""
+        return github_branch_url(
+            self._settings["official_repo_url"],
+            self._settings["distribution_branch"],
+        )
+
     def ensure_wrappers_and_path(self, path: str) -> dict[str, Any]:
         report = ensure_wrappers_and_path(repo_dir=Path(path).expanduser())
         return report.to_log_entry()
@@ -346,6 +366,21 @@ class TrellisAPI:
         result = self._window.create_file_dialog(
             webview.FOLDER_DIALOG,
             directory=str(Path.home()),
+        )
+        if result and len(result) > 0:
+            return str(result[0])
+        return None
+
+    def select_file(self, file_types: tuple[str, str] | None = None) -> str | None:
+        """打开文件选择对话框，默认过滤 zip 文件。"""
+        if self._window is None:
+            return None
+        filters = (file_types,) if file_types else (("Zip files", ".zip"),)
+        result = self._window.create_file_dialog(
+            webview.OPEN_DIALOG,
+            directory=str(Path.home()),
+            allow_multiple=False,
+            file_types=filters,
         )
         if result and len(result) > 0:
             return str(result[0])

@@ -4,6 +4,7 @@ import json
 import platform
 import shutil
 import stat
+import zipfile
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +23,7 @@ from app.runner import CommandResult, CommandRunner
 from app.task_snapshot import read_task_snapshot, TrellisTaskItem, TrellisTaskSnapshot
 
 Status = Literal["ok", "warning", "error", "unknown", "info"]
+SourceType = Literal["git", "zip_snapshot", "invalid", "missing"]
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,7 @@ class RepoStatus:
     behind: int | None
     status: Status
     message: str
+    source_type: SourceType = "missing"
 
 
 @dataclass(frozen=True)
@@ -492,6 +495,156 @@ def is_trellis_repo(repo_dir: Path) -> bool:
     return cli_entry_path(repo_dir).exists() and (repo_dir / "packages" / "cli" / "package.json").exists()
 
 
+def is_valid_source_tree(repo_dir: Path) -> bool:
+    """验证目录是否为有效的 Trellis 源码树，不依赖 .git 目录。"""
+    if not repo_dir.is_dir():
+        return False
+    # 检查核心标记文件，与 GitHub codeload zip 解压后的目录结构兼容
+    markers = [
+        repo_dir / "package.json",
+        repo_dir / "pnpm-lock.yaml",
+        repo_dir / "packages" / "cli" / "package.json",
+        repo_dir / "packages" / "cli" / "bin" / "trellis.js",
+    ]
+    return all(marker.exists() for marker in markers)
+
+
+def _safe_extract_zip(zip_path: Path, extract_to: Path) -> Path:
+    """安全解压 zip 到临时目录，拒绝路径遍历攻击，返回检测到的源码根目录。"""
+    extract_to.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        # 先校验所有条目，拒绝绝对路径和 .. 遍历
+        for info in zf.infolist():
+            target = extract_to / info.filename
+            try:
+                target.resolve().relative_to(extract_to.resolve())
+            except ValueError:
+                raise OperationError(f"zip 包含非法路径：{info.filename}")
+        zf.extractall(extract_to)
+
+    # GitHub codeload zip 解压后通常有一个顶层文件夹（如 Trellis-custom-beilo-v0.5-rc）
+    # 先尝试直接找源码根
+    if is_valid_source_tree(extract_to):
+        return extract_to
+
+    # 否则在子目录中查找有效的源码根
+    for child in extract_to.iterdir():
+        if child.is_dir() and is_valid_source_tree(child):
+            return child
+
+    raise OperationError("zip 中未找到有效的 Trellis 源码树。")
+
+
+def install_from_zip(
+    zip_path: Path,
+    repo_dir: Path = DEFAULT_REPO_DIR,
+    replace: bool = False,
+    distribution_branch: str = DISTRIBUTION_BRANCH,
+    runner: CommandRunner | None = None,
+) -> OperationReport:
+    """从本地 zip 安装或重装 Trellis 工具源码。"""
+    runner = runner or CommandRunner()
+    commands: list[CommandResult] = []
+    zip_path = zip_path.expanduser().resolve()
+    repo_dir = repo_dir.expanduser()
+
+    if not zip_path.exists():
+        raise OperationError(f"zip 文件不存在：{zip_path}")
+    if not zip_path.is_file():
+        raise OperationError(f"路径不是文件：{zip_path}")
+
+    # 拒绝非 zip 文件（通过魔数判断，不依赖扩展名）
+    try:
+        with zip_path.open("rb") as f:
+            magic = f.read(4)
+        if magic not in (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"):
+            raise OperationError("文件不是有效的 zip 格式。")
+    except OSError as e:
+        raise OperationError(f"读取 zip 文件失败：{e}")
+
+    # 目标已存在且未要求替换时阻断
+    if repo_dir.exists() and not replace:
+        raise OperationError(
+            "工具仓库已存在，如需替换请先确认重装。",
+            commands,
+        )
+
+    # 在 manager 控制区域内创建临时目录
+    temp_base = repo_dir.parent / ".manager-temp"
+    temp_base.mkdir(parents=True, exist_ok=True)
+    temp_extract = temp_base / f"extract-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+    try:
+        # 安全解压并定位源码根
+        source_root = _safe_extract_zip(zip_path, temp_extract)
+
+        # 验证源码根
+        if not is_valid_source_tree(source_root):
+            raise OperationError("zip 内容不是有效的 Trellis 源码树。")
+
+        # 替换策略：备份旧目录 → 移动新目录 → 成功则删备份，失败则恢复
+        backup_dir: Path | None = None
+        if repo_dir.exists():
+            backup_dir = repo_dir.parent / f"{repo_dir.name}.backup-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            repo_dir.rename(backup_dir)
+
+        try:
+            # 把验证通过的源码根移动到目标位置
+            # 如果 source_root 就是 temp_extract，直接重命名；否则复制内容
+            if source_root == temp_extract:
+                temp_extract.rename(repo_dir)
+            else:
+                repo_dir.mkdir(parents=True, exist_ok=True)
+                for item in source_root.iterdir():
+                    dest = repo_dir / item.name
+                    if dest.exists():
+                        if dest.is_dir():
+                            shutil.rmtree(dest)
+                        else:
+                            dest.unlink()
+                    if item.is_dir():
+                        shutil.copytree(item, dest)
+                    else:
+                        shutil.copy2(item, dest)
+        except Exception:
+            # 恢复备份
+            if backup_dir and backup_dir.exists():
+                if repo_dir.exists():
+                    shutil.rmtree(repo_dir)
+                backup_dir.rename(repo_dir)
+            raise OperationError("安装源码到目标路径失败，已恢复原有目录。", commands)
+
+        # 安装依赖并构建
+        for command, message, timeout in [
+            (["pnpm", "install"], "安装依赖失败。", 600),
+            (["pnpm", "--filter", "@mindfoldhq/trellis", "build"], "构建 Trellis CLI 失败。", 600),
+        ]:
+            result = runner.run(command, cwd=repo_dir, timeout=timeout)
+            commands.append(result)
+            _raise_if_failed(result, message, commands)
+
+        # 成功：清理备份和临时目录
+        if backup_dir and backup_dir.exists():
+            shutil.rmtree(backup_dir)
+
+        return OperationReport(
+            title="从本地 zip 安装 Trellis 工具仓库",
+            ok=True,
+            message="工具仓库已从本地 zip 安装并构建完成。",
+            commands=commands,
+            details={
+                "repo": str(repo_dir),
+                "zip": str(zip_path),
+                "source_type": "zip_snapshot",
+                "branch": distribution_branch,
+            },
+        )
+    finally:
+        # 无论成功与否，清理临时解压目录
+        if temp_extract.exists():
+            shutil.rmtree(temp_extract)
+
+
 def check_tool_repo(
     repo_dir: Path = DEFAULT_REPO_DIR,
     runner: CommandRunner | None = None,
@@ -513,68 +666,91 @@ def check_tool_repo(
             behind=None,
             status="unknown",
             message="尚未下载 Trellis 工具仓库。",
+            source_type="missing",
         )
     git_ok = is_git_repo(repo_dir, runner)
-    if not git_ok:
+    if git_ok:
+        dirty, _, _ = git_status_short(repo_dir, runner)
+        branch = _successful_output(runner.run(["git", "branch", "--show-current"], cwd=repo_dir, timeout=10))
+        origin = _successful_output(runner.run(["git", "remote", "get-url", "origin"], cwd=repo_dir, timeout=10))
+        valid = is_trellis_repo(repo_dir)
+        version = read_cli_version(repo_dir)
+        ahead: int | None = None
+        behind: int | None = None
+        if dirty:
+            status: Status = "info"
+            message = "工具仓库有本地变更（如 lock 文件），更新时会自动暂存并恢复。"
+        elif valid:
+            fetch = runner.run(["git", "fetch", "origin", distribution_branch], cwd=repo_dir, timeout=120)
+            if fetch.ok:
+                ahead, behind = _read_ahead_behind(repo_dir, runner, distribution_branch)
+                if branch != distribution_branch:
+                    status = "warning"
+                    message = f"当前分支不是团队分发分支，点击更新会切到 {distribution_branch}。"
+                elif behind and behind > 0:
+                    status = "warning"
+                    message = f"远端有 {behind} 个新提交，可以更新。"
+                elif ahead and ahead > 0:
+                    status = "warning"
+                    message = f"本地领先远端 {ahead} 个提交，更新前建议维护者确认。"
+                else:
+                    status = "ok"
+                    message = "工具仓库已是最新。"
+            else:
+                status = "warning"
+                message = "工具仓库可用，但检查远端更新失败。"
+        else:
+            status = "error"
+            message = "目录不是有效的 Trellis 工具仓库。"
+        return RepoStatus(
+            path=repo_dir,
+            exists=True,
+            is_git=True,
+            is_trellis_repo=valid,
+            dirty=dirty,
+            branch=branch,
+            origin=origin,
+            version=version,
+            ahead=ahead,
+            behind=behind,
+            status=status,
+            message=message,
+            source_type="git" if valid else "invalid",
+        )
+
+    # 非 git 目录：检查是否为有效的源码快照
+    valid_snapshot = is_valid_source_tree(repo_dir)
+    version = read_cli_version(repo_dir) if valid_snapshot else None
+    if valid_snapshot:
         return RepoStatus(
             path=repo_dir,
             exists=True,
             is_git=False,
-            is_trellis_repo=False,
+            is_trellis_repo=True,
             dirty=False,
-            branch=None,
+            branch=distribution_branch,
             origin=None,
-            version=None,
+            version=version,
             ahead=None,
             behind=None,
-            status="error",
-            message="安装目录存在但不是 git 仓库。",
+            status="ok",
+            message="本地源码快照，不能在线 pull；如需更新请选择新的 zip。",
+            source_type="zip_snapshot",
         )
-    dirty, _, _ = git_status_short(repo_dir, runner)
-    branch = _successful_output(runner.run(["git", "branch", "--show-current"], cwd=repo_dir, timeout=10))
-    origin = _successful_output(runner.run(["git", "remote", "get-url", "origin"], cwd=repo_dir, timeout=10))
-    valid = is_trellis_repo(repo_dir)
-    version = read_cli_version(repo_dir)
-    ahead: int | None = None
-    behind: int | None = None
-    if dirty:
-        status: Status = "info"
-        message = "工具仓库有本地变更（如 lock 文件），更新时会自动暂存并恢复。"
-    elif valid:
-        fetch = runner.run(["git", "fetch", "origin", distribution_branch], cwd=repo_dir, timeout=120)
-        if fetch.ok:
-            ahead, behind = _read_ahead_behind(repo_dir, runner, distribution_branch)
-            if branch != distribution_branch:
-                status = "warning"
-                message = f"当前分支不是团队分发分支，点击更新会切到 {distribution_branch}。"
-            elif behind and behind > 0:
-                status = "warning"
-                message = f"远端有 {behind} 个新提交，可以更新。"
-            elif ahead and ahead > 0:
-                status = "warning"
-                message = f"本地领先远端 {ahead} 个提交，更新前建议维护者确认。"
-            else:
-                status = "ok"
-                message = "工具仓库已是最新。"
-        else:
-            status = "warning"
-            message = "工具仓库可用，但检查远端更新失败。"
-    else:
-        status = "error"
-        message = "目录不是有效的 Trellis 工具仓库。"
     return RepoStatus(
         path=repo_dir,
         exists=True,
-        is_git=True,
-        is_trellis_repo=valid,
-        dirty=dirty,
-        branch=branch,
-        origin=origin,
-        version=version,
-        ahead=ahead,
-        behind=behind,
-        status=status,
-        message=message,
+        is_git=False,
+        is_trellis_repo=False,
+        dirty=False,
+        branch=None,
+        origin=None,
+        version=None,
+        ahead=None,
+        behind=None,
+        status="error",
+        message="安装目录存在但不是 git 仓库，也不是有效的 Trellis 源码快照。",
+        source_type="invalid",
     )
 
 
@@ -1152,6 +1328,21 @@ def _read_ahead_behind(
         return int(parts[0]), int(parts[1])
     except ValueError:
         return None, None
+
+
+def github_branch_url(official_repo_url: str, distribution_branch: str) -> str | None:
+    """从官方仓库 URL 和分发分支推导 GitHub 分支页面链接。"""
+    url = official_repo_url.strip()
+    # 支持 HTTPS 和 SSH 格式的 GitHub URL
+    if url.startswith("https://github.com/"):
+        # https://github.com/owner/repo.git → https://github.com/owner/repo/tree/branch
+        base = url.removeprefix("https://github.com/").removesuffix(".git")
+        return f"https://github.com/{base}/tree/{distribution_branch}"
+    if url.startswith("git@github.com:"):
+        # git@github.com:owner/repo.git → https://github.com/owner/repo/tree/branch
+        base = url.removeprefix("git@github.com:").removesuffix(".git")
+        return f"https://github.com/{base}/tree/{distribution_branch}"
+    return None
 
 
 def _raise_if_failed(result: CommandResult, message: str, commands: list[CommandResult]) -> None:

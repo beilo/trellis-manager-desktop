@@ -77,6 +77,17 @@ python3 launcher.py
 - 项目 update 使用 `tl update --force`
 - 客户端不负责业务项目 `git add` / `commit` / `push`
 
+## 本地源码 zip 安装
+
+当用户机器无法可靠访问 GitHub 进行 `git clone` 时，可以通过本地源码 zip 安装 Trellis 工具仓库：
+
+1. **维护者流程**：点击工具仓库卡片上的「打开分发分支」链接，在 GitHub 页面下载分支 zip（或通过 `https://codeload.github.com/beilo/Trellis/zip/refs/heads/custom/beilo-v0.5-rc` 获取）
+2. **分享**：将 zip 通过内部渠道分享给团队成员
+3. **安装**：在「本地源码 zip 安装」区域输入 zip 文件路径，点击「安装」
+4. **更新**：zip 安装的工具仓库不能在线 `git pull`，如需更新请选择新的 zip 并点击「重装」
+
+zip 安装的源码仍然是源码（不是预构建 CLI），因此仍然需要本地有可用的 `node` 和 `pnpm` 来执行依赖安装和构建。
+
 ## 打包轻量 `.app`
 
 先构建前端：
@@ -123,7 +134,75 @@ open "dist/standalone/Trellis Manager.app"
 apps/trellis-manager-desktop/dist/standalone/Trellis Manager-macos-arm64.zip
 ```
 
-这个包未做 Apple Developer ID 签名和 notarize。正式公网分发还需要补签名、公证和 DMG 流程；内部小范围分发可以先用 zip。下载或更新 Trellis 工具仓库仍需要用户机器可访问 git 网络，且需要系统有可用的 `git`、`node` 和 `pnpm`。如果用户通过 nvm 安装 Node，客户端会按当前用户目录补充 `~/.nvm/versions/node/*/bin`，避免从 Finder 启动时拿不到终端 PATH。
+## 打包踩坑记录
+
+本节记录实际打包过程中遇到的问题和解法，避免重复踩坑。
+
+### 1. 前端依赖不在 pnpm workspace 内
+
+`apps/trellis-manager-desktop/frontend` 未被 `pnpm-workspace.yaml` 包含（workspace 只声明了 `packages/*`），因此根目录的 `pnpm install` 不会安装前端依赖，`pnpm --filter frontend build` 也找不到项目。
+
+**解法**：进入 `frontend/` 目录单独安装依赖。由于 pnpm hoist 链断裂，用 npm 更可靠：
+
+```bash
+cd apps/trellis-manager-desktop/frontend
+npm install
+```
+
+### 2. tsc 版本不匹配
+
+`package.json` 声明 `typescript: ~6.0.2`，但根 workspace 实际安装的是 `5.9.3`。pnpm hoist 导致前端 symlink 指向根目录的 5.9.3，而 6.0 的包根本不存在，`tsc -b` 会报 `MODULE_NOT_FOUND`。此外 `tsconfig.app.json` 中的 `ignoreDeprecations: "6.0"` 在 5.x 上也不被识别。
+
+**解法**：跳过 tsc 类型检查，直接用 vite build（vite 不依赖 tsc 产线，noEmit 模式只做类型检查）：
+
+```bash
+cd apps/trellis-manager-desktop/frontend
+npx vite build
+```
+
+### 3. vite 必须从 frontend 目录运行
+
+vite 以 `index.html` 为入口，它相对于 cwd 查找。如果在项目根目录调用 `vite build`，会报 `UNRESOLVED_ENTRY: Cannot resolve entry module index.html`。
+
+**解法**：始终先 `cd` 到 `frontend/` 再执行构建命令。
+
+### 4. node_modules/.bin 内 symlink 可能断裂
+
+pnpm 的 `.bin` symlink 指向全局 store 的硬链接路径，如果 store 中对应包版本被替换（比如 workspace 其他成员升级了 typescript），symlink 会悬空。`./node_modules/.bin/vite` 看起来存在但执行报 `Cannot find module`。
+
+**解法**：删掉 `frontend/node_modules` 重新 `npm install`，npm 不用 symlink 机制，不会断裂。
+
+### 一键打包命令（推荐）
+
+```bash
+cd /Users/am/temp/Trellis/apps/trellis-manager-desktop
+
+# 1. 构建前端
+cd frontend
+rm -rf node_modules
+npm install
+npx vite build
+cd ..
+
+# 2. 打包独立 .app（含 Python 运行时，用户无需预装 Python）
+python3 scripts/build_standalone_app.py
+
+# 3. 产出物
+# .app → dist/standalone/Trellis Manager.app
+# .zip → dist/standalone/Trellis Manager-macos-arm64.zip
+
+# 4. 打包轻量 .app（不含 Python 运行时，需要系统 Python 3.11+）
+# python3 scripts/build_app.py
+# .app → dist/Trellis Manager.app
+```
+
+这个包未做 Apple Developer ID 签名和 notarize。正式公网分发还需要补签名、公证和 DMG 流程；内部小范围分发可以先用 zip。
+
+下载或更新 Trellis 工具仓库有两种方式：
+- **在线 Git 安装**：需要用户机器可访问 git 网络，使用「下载 / 更新并构建」按钮
+- **本地 zip 安装**：不需要 GitHub 访问，使用「本地源码 zip 安装」区域，适合网络受限环境
+
+无论哪种方式，都需要系统有可用的 `node` 和 `pnpm` 来执行依赖安装和构建。如果用户通过 nvm 安装 Node，客户端会按当前用户目录补充 `~/.nvm/versions/node/*/bin`，避免从 Finder 启动时拿不到终端 PATH。
 
 ## 验证
 
