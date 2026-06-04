@@ -89,7 +89,7 @@ export function ProjectCard({
             className={cn(
               "transition-all duration-200 font-semibold",
               recommendInit
-                ? "bg-blue-600 hover:bg-blue-700 text-white border-transparent shadow-sm active:scale-95"
+                ? "bg-primary hover:bg-primary/90 text-primary-foreground border-transparent shadow-sm active:scale-95"
                 : "border border-border bg-background hover:bg-muted"
             )}
           >
@@ -103,7 +103,7 @@ export function ProjectCard({
             className={cn(
               "transition-all duration-200 font-semibold",
               recommendUpdate
-                ? "bg-blue-600 hover:bg-blue-700 text-white border-transparent shadow-sm active:scale-95"
+                ? "bg-primary hover:bg-primary/90 text-primary-foreground border-transparent shadow-sm active:scale-95"
                 : "border border-border bg-background hover:bg-muted"
             )}
           >

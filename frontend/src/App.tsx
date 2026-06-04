@@ -331,9 +331,8 @@ export default function App() {
       for (const item of items) {
         for (const cmd of item.commands) {
           addLog('command', `$ ${cmd.command_line}`)
-          // 保留原始输出，不 trim，确保空白行和格式不被静默丢弃。
-          if (cmd.stdout !== undefined && cmd.stdout !== '') addLog('stdout', cmd.stdout)
-          if (cmd.stderr !== undefined && cmd.stderr !== '') addLog('stderr', cmd.stderr)
+          if (cmd.stdout?.trim()) addLog('stdout', cmd.stdout.trim())
+          if (cmd.stderr?.trim()) addLog('stderr', cmd.stderr.trim())
         }
       }
     } catch (err) {
@@ -723,9 +722,10 @@ export default function App() {
 
   const handleCopyLogs = useCallback(async () => {
     try {
-      // 拉取完整持久化历史日志，与当前会话日志合并后复制，确保剪贴板包含全部记录。
+      // 拉取全部持久化历史日志（旧后端兼容：接口不存在则返回空数组）。
       const allHistory = await api.getAllLogs()
       const historyEntries = allHistory.flatMap(operationLogToEntries)
+      // 历史日志按时间正序排列（文件内是倒序），当前会话日志接在后面。
       const combined = [...historyEntries, ...logEntries]
       const text = serializeLogEntries(combined)
       await navigator.clipboard.writeText(text)

@@ -21,7 +21,7 @@ function TaskCountPill({ count, loading }: { count: number; loading: boolean }) 
   // 项目列表只展示 active 进行中任务数，避免把归档任务混进左侧导航。
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700"
+      className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
       title="进行中任务数"
     >
       {loading && <Loader2 className="size-2.5 animate-spin" />}
@@ -65,10 +65,10 @@ export function ProjectList({
   onRemove,
 }: ProjectListProps) {
   return (
-    <aside className="rounded-2xl border border-border/40 bg-card/80 dark:bg-card/75 backdrop-blur-md text-card-foreground overflow-hidden shadow-sm">
+    <aside className="rounded-xl border border-border/40 bg-card/80 dark:bg-card/75 backdrop-blur-md text-card-foreground overflow-hidden shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-sm font-bold text-foreground">项目列表</span>
+          <span className="text-sm font-semibold text-foreground">项目列表</span>
           <span className="text-xs text-muted-foreground">
             {projects.length} 个本地项目
             · {batchUpdateLoading ? '正在检查过期项目…' : batchUpdateCount > 0 ? `${batchUpdateCount} 个待更新` : '暂无待更新'}
@@ -122,7 +122,7 @@ export function ProjectList({
                     'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-left cursor-pointer',
                     'transition-all duration-150 border border-transparent border-l-[3px]',
                     selected
-                      ? 'bg-blue-50/70 dark:bg-blue-950/25 border-blue-500/5 dark:border-blue-500/10 border-l-blue-500 shadow-[0_2px_8px_rgba(59,130,246,0.04)]'
+                      ? 'bg-primary/5 dark:bg-primary/10 border-primary/5 dark:border-primary/10 border-l-primary shadow-[0_2px_8px_rgba(204,120,92,0.03)]'
                       : 'border-l-transparent hover:bg-muted/65 hover:border-border/10',
                   )}
                 >
@@ -133,7 +133,7 @@ export function ProjectList({
                         <StatusBadge status={displayStatus} variant="dot" className="mt-0.5" />
                         <span className={cn(
                           'truncate text-sm font-semibold transition-colors duration-150',
-                          selected ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'
+                          selected ? 'text-primary' : 'text-foreground'
                         )}>
                           {projectName(path)}
                         </span>

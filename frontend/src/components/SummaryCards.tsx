@@ -11,13 +11,13 @@ interface SummaryCardProps {
 
 function SummaryCard({ title, value, status, badgeLabel }: SummaryCardProps) {
   return (
-    <Card className="flex-1 min-w-0 cursor-default transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-foreground/15">
+    <Card className="flex-1 min-w-0 cursor-default transition-all duration-200 border-border hover:border-primary/50 hover:shadow-sm">
       <CardContent className="flex items-center justify-between gap-4 px-5 py-4">
         <div className="flex flex-col gap-1 min-w-0">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide truncate">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider truncate">
             {title}
           </span>
-          <span className="text-2xl font-extrabold tracking-tight text-foreground truncate">
+          <span className="text-2xl font-serif font-normal tracking-tight text-foreground truncate">
             {value}
           </span>
         </div>

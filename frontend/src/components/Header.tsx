@@ -20,7 +20,7 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
   return (
     <div className="flex flex-col gap-4 pb-4 lg:flex-row lg:items-start lg:justify-between">
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
+        <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">
           团队 Trellis 工具链管理
         </h1>
         <p className="text-sm text-muted-foreground">
@@ -29,10 +29,10 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
       </div>
 
       <div className="flex flex-wrap items-center justify-start gap-2 pt-1 lg:justify-end">
-        <div className="relative flex w-[240px] h-9 items-center rounded-full bg-muted/50 dark:bg-muted/20 p-1 border border-border/30 select-none">
+        <div className="relative flex w-[240px] h-9 items-center rounded-full bg-card/60 p-1 border border-border/60 select-none">
           {/* Slider Background */}
           <div
-            className="absolute top-1 bottom-1 rounded-full bg-blue-500 dark:bg-blue-600 transition-all duration-200 ease-out shadow-sm"
+            className="absolute top-1 bottom-1 rounded-full bg-background transition-all duration-200 ease-out shadow-[0_1px_3px_rgba(20,20,19,0.06)]"
             style={{
               left: activeTab === 'kanban' ? '4px' : activeTab === 'toolchain' ? '82px' : '160px',
               width: '76px',
@@ -45,7 +45,7 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
             className={cn(
               'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
               activeTab === 'kanban'
-                ? 'text-white font-semibold'
+                ? 'text-primary font-semibold'
                 : 'text-muted-foreground hover:text-foreground hover:bg-transparent dark:hover:bg-transparent',
             )}
           >
@@ -59,7 +59,7 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
             className={cn(
               'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
               activeTab === 'toolchain'
-                ? 'text-white font-semibold'
+                ? 'text-primary font-semibold'
                 : 'text-muted-foreground hover:text-foreground hover:bg-transparent dark:hover:bg-transparent',
             )}
           >
@@ -73,7 +73,7 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
             className={cn(
               'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
               activeTab === 'projects'
-                ? 'text-white font-semibold'
+                ? 'text-primary font-semibold'
                 : 'text-muted-foreground hover:text-foreground hover:bg-transparent dark:hover:bg-transparent',
             )}
           >

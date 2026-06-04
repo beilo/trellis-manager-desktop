@@ -257,7 +257,7 @@ export function KanbanPanel({ onNavigateToTask }: KanbanPanelProps) {
                 <section key={column} className="flex min-h-0 flex-col gap-3 rounded-2xl border border-border/40 bg-card/65 p-3 shadow-sm">
                   <div className="flex items-center justify-between gap-3 select-none">
                     <h3 className="text-sm font-semibold text-foreground">{COLUMN_TITLES[column]}</h3>
-                    <span className="shrink-0 text-xs text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">{tasks.length} 个任务</span>
+                    <span className="shrink-0 text-xs text-foreground/75 bg-muted/30 px-2 py-0.5 rounded-full">{tasks.length} 个任务</span>
                   </div>
                   <ScrollArea className="h-[28rem]">
                     <div className="flex min-h-full flex-col gap-2 pr-2">

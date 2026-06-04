@@ -30,7 +30,7 @@ export function KanbanTaskCard({ task, projectName, onClick }: KanbanTaskCardPro
     >
       <span className={cn('size-2 shrink-0 rounded-full', STATUS_DOT_CLASS[task.status])} />
       <span className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground/90">{task.title}</span>
-      <span className="max-w-32 shrink-0 truncate text-[10px] font-semibold font-mono bg-muted/65 text-muted-foreground px-1.5 py-0.5 rounded-md border border-border/10">
+      <span className="max-w-32 shrink-0 truncate text-[10px] font-semibold font-mono bg-background text-muted px-1.5 py-0.5 rounded border border-border/40">
         {projectName}
       </span>
     </button>

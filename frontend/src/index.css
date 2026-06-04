@@ -6,7 +6,68 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "EB Garamond", "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+}
+
+:root {
+  --background: 44 29% 97%; /* #faf9f5 */
+  --foreground: 60 3% 8%; /* #141413 */
+  --card: 39 32% 90%; /* #efe9de */
+  --card-foreground: 60 3% 8%;
+  --popover: 39 32% 90%;
+  --popover-foreground: 60 3% 8%;
+  --primary: 15 52% 58%; /* #cc785c */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 40 22% 93%;
+  --secondary-foreground: 60 3% 8%;
+  --muted: 45 4% 41%; /* #6c6a64 */
+  --muted-foreground: 45 5% 53%; /* #8e8b82 */
+  --accent: 38 33% 87%; /* #e8e0d2 */
+  --accent-foreground: 60 3% 8%;
+  --destructive: 0 54% 52%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 30 22% 87%; /* #e6dfd8 */
+  --input: 30 22% 87%;
+  --ring: 15 52% 58%;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+.dark {
+  --background: 40 7% 9%; /* #181715 */
+  --foreground: 44 29% 97%; /* #faf9f5 */
+  --card: 36 7% 14%; /* #252320 */
+  --card-foreground: 44 29% 97%;
+  --popover: 36 7% 14%;
+  --popover-foreground: 44 29% 97%;
+  --primary: 15 52% 58%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 36 7% 14%;
+  --secondary-foreground: 44 29% 97%;
+  --muted: 42 5% 61%; /* #a09d96 */
+  --muted-foreground: 42 5% 61%;
+  --accent: 45 7% 11%; /* #1f1e1b */
+  --accent-foreground: 44 29% 97%;
+  --destructive: 0 54% 52%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 36 7% 14%;
+  --input: 36 7% 14%;
+  --ring: 15 52% 58%;
 }
 
 * {

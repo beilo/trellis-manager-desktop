@@ -4,11 +4,6 @@
 
 ### Added
 
-- **LogPanel 复制全部日志**：点击复制按钮时，复制持久化日志文件中的全部历史记录 + 当前会话日志，而非仅当前内存中的日志条目。
-  - 后端 `api.py`：新增 `get_all_logs()` 方法，返回完整持久化日志（不截断）
-  - 前端 `api.ts`：新增 `getAllLogs()` 包装，兼容旧后端（接口不存在时返回空数组，降级为只复制当前内存日志）
-  - 前端 `App.tsx`：`handleCopyLogs` 改为异步，拉取全部历史日志并与当前会话日志合并后复制；提取 `serializeLogEntries` 统一序列化逻辑；添加 try-catch，复制失败时通过操作日志提示用户
-  - 前端 `LogPanel.tsx`：复制按钮添加 `isCopying` loading 状态（`disabled` + `animate-spin`），`onCopy` prop 支持同步/异步回调
 - **本地源码 zip 安装**：工具链页新增「本地源码 zip 安装」区域，支持从本地 zip 文件安装/重装 Trellis 工具源码，无需 GitHub 访问。
   - 后端新增 `is_valid_source_tree` 验证源码树（不依赖 `.git`）、`_safe_extract_zip` 安全解压（拒绝路径遍历）、`install_from_zip` 安装/重装（备份-交换-清理策略）
   - 后端新增 `github_branch_url` 从仓库 URL 推导 GitHub 分支页面链接
