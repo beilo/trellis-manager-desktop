@@ -50,8 +50,9 @@ function reportToLogs(report: OperationReport): LogEntry[] {
   entries.push(mkLog(report.ok ? 'success' : 'error', report.message))
   for (const cmd of report.commands) {
     entries.push(mkLog('command', `$ ${cmd.command_line}`))
-    if (cmd.stdout?.trim()) entries.push(mkLog('stdout', cmd.stdout.trim()))
-    if (cmd.stderr?.trim()) entries.push(mkLog('stderr', cmd.stderr.trim()))
+    // stdout/stderr 保留原始内容，不因为空白字符而丢弃，确保多行输出和首尾空格在日志中完整呈现。
+    if (cmd.stdout !== undefined && cmd.stdout !== '') entries.push(mkLog('stdout', cmd.stdout))
+    if (cmd.stderr !== undefined && cmd.stderr !== '') entries.push(mkLog('stderr', cmd.stderr))
     if (cmd.error) entries.push(mkLog('error', cmd.error))
   }
   return entries
@@ -64,8 +65,9 @@ function operationLogToEntries(entry: OperationLogEntry): LogEntry[] {
   ]
   for (const cmd of entry.commands ?? []) {
     entries.push(mkLog('command', `$ ${cmd.command_line ?? cmd.command?.join(' ')}`))
-    if (cmd.stdout?.trim()) entries.push(mkLog('stdout', cmd.stdout.trim()))
-    if (cmd.stderr?.trim()) entries.push(mkLog('stderr', cmd.stderr.trim()))
+    // 保留原始 stdout/stderr，不 trim，确保空白行和多行格式在复制日志时不丢失。
+    if (cmd.stdout !== undefined && cmd.stdout !== '') entries.push(mkLog('stdout', cmd.stdout))
+    if (cmd.stderr !== undefined && cmd.stderr !== '') entries.push(mkLog('stderr', cmd.stderr))
     if (cmd.error) entries.push(mkLog('error', cmd.error))
   }
   return entries
@@ -329,8 +331,9 @@ export default function App() {
       for (const item of items) {
         for (const cmd of item.commands) {
           addLog('command', `$ ${cmd.command_line}`)
-          if (cmd.stdout?.trim()) addLog('stdout', cmd.stdout.trim())
-          if (cmd.stderr?.trim()) addLog('stderr', cmd.stderr.trim())
+          // 保留原始输出，不 trim，确保空白行和格式不被静默丢弃。
+          if (cmd.stdout !== undefined && cmd.stdout !== '') addLog('stdout', cmd.stdout)
+          if (cmd.stderr !== undefined && cmd.stderr !== '') addLog('stderr', cmd.stderr)
         }
       }
     } catch (err) {
@@ -707,16 +710,30 @@ export default function App() {
 
   // ── 日志操作 ──
 
-  const handleCopyLogs = useCallback(() => {
-    const text = logEntries
+  // 把 LogEntry 数组序列化为带前缀的纯文本，供剪贴板使用。
+  const serializeLogEntries = useCallback((entries: LogEntry[]): string => {
+    return entries
       .map((e) => {
-        const style = { task: '[任务]', success: '[成功]', error: '[失败]', command: '[命令]', info: '[信息]', stdout: '', stderr: '' }
+        const style = { task: '[任务]', success: '[成功]', error: '[失败]', command: '[命令]', info: '[信息]', stdout: '', stderr: '[stderr]' }
         const prefix = style[e.level] ?? ''
         return prefix ? `${prefix} ${e.text}` : e.text
       })
       .join('\n')
-    navigator.clipboard.writeText(text)
-  }, [logEntries])
+  }, [])
+
+  const handleCopyLogs = useCallback(async () => {
+    try {
+      // 拉取完整持久化历史日志，与当前会话日志合并后复制，确保剪贴板包含全部记录。
+      const allHistory = await api.getAllLogs()
+      const historyEntries = allHistory.flatMap(operationLogToEntries)
+      const combined = [...historyEntries, ...logEntries]
+      const text = serializeLogEntries(combined)
+      await navigator.clipboard.writeText(text)
+    } catch (err) {
+      // 复制失败时提示用户，避免静默吞掉异常。
+      addLog('error', `复制日志失败：${err}`)
+    }
+  }, [logEntries, serializeLogEntries, addLog])
 
   const handleClearLogs = useCallback(() => {
     setLogEntries([])

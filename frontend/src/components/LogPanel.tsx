@@ -19,7 +19,7 @@ interface LogPanelProps {
   entries: LogEntry[]
   autoOpen: boolean
   openSignal?: number
-  onCopy: () => void
+  onCopy: () => void | Promise<void>
   onClear: () => void
 }
 
@@ -27,6 +27,7 @@ type PanelState = 'collapsed' | 'expanded' | 'maximized'
 
 export function LogPanel({ entries, autoOpen, openSignal = 0, onCopy, onClear }: LogPanelProps) {
   const [panelState, setPanelState] = useState<PanelState>('collapsed')
+  const [isCopying, setIsCopying] = useState(false)
   const scrollRootRef = useRef<HTMLDivElement>(null)
   const prevLengthRef = useRef(entries.length)
 
@@ -161,11 +162,19 @@ export function LogPanel({ entries, autoOpen, openSignal = 0, onCopy, onClear }:
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={onCopy}
-                  className="size-7 text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent hover:border-slate-800"
+                  disabled={isCopying}
+                  onClick={async () => {
+                    setIsCopying(true)
+                    try {
+                      await onCopy()
+                    } finally {
+                      setIsCopying(false)
+                    }
+                  }}
+                  className="size-7 text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent hover:border-slate-800 disabled:opacity-50"
                   title="复制日志"
                 >
-                  <Copy className="size-3.5" />
+                  <Copy className={cn('size-3.5', isCopying && 'animate-spin')} />
                 </Button>
                 <Button
                   variant="ghost"

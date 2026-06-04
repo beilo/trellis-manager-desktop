@@ -58,6 +58,7 @@ interface PywebviewAPI {
   remember_project(path: string): Promise<void>
   get_recent_projects(): Promise<string[]>
   get_logs(): Promise<OperationLogEntry[]>
+  get_all_logs?(): Promise<OperationLogEntry[]>
   select_directory(): Promise<string | null>
   select_file?(file_types?: [string, string]): Promise<string | null>
   open_directory(path: string): Promise<void>
@@ -287,6 +288,15 @@ export const api = {
 
   async getLogs(): Promise<OperationLogEntry[]> {
     return (await getApi()).get_logs()
+  },
+
+  async getAllLogs(): Promise<OperationLogEntry[]> {
+    const bridge = await getApi()
+    if (typeof bridge.get_all_logs !== 'function') {
+      // 兼容旧桌面后端：接口不存在时返回空数组，前端降级为只复制当前内存日志。
+      return []
+    }
+    return bridge.get_all_logs()
   },
 
   async selectDirectory(): Promise<string | null> {

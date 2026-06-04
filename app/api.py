@@ -358,6 +358,10 @@ class TrellisAPI:
     def get_logs(self) -> list[dict[str, Any]]:
         return load_operation_logs(self._log_file) if self._log_file else load_operation_logs()
 
+    def get_all_logs(self) -> list[dict[str, Any]]:
+        # 返回完整持久化日志，不截断，供前端"复制全部日志"使用。
+        return load_operation_logs(self._log_file) if self._log_file else load_operation_logs()
+
     # ── 文件对话框 / 系统操作 ──
 
     def select_directory(self) -> str | None:
