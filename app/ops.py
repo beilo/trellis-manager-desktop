@@ -616,12 +616,10 @@ def install_from_zip(
                 backup_dir.rename(repo_dir)
             raise OperationError("安装源码到目标路径失败，已恢复原有目录。", commands)
 
-        # 安装依赖并构建
+        # clean 端已经把 core/cli 的顺序收敛进根 build，这里只认统一入口，避免重复维护构建顺序。
         for command, message, timeout in [
             (["pnpm", "install"], "安装依赖失败。", 600),
-            # CLI 依赖 workspace core 的 dist/types，zip 快照没有预构建产物，必须先生成 core。
-            (["pnpm", "--filter", "@mindfoldhq/trellis-core", "build"], "构建 Trellis Core 失败。", 600),
-            (["pnpm", "--filter", "@mindfoldhq/trellis", "build"], "构建 Trellis CLI 失败。", 600),
+            (["pnpm", "build"], "构建 Trellis 失败。", 600),
         ]:
             result = runner.run(command, cwd=repo_dir, timeout=timeout)
             commands.append(result)

@@ -33,7 +33,7 @@
 
 ### Changed
 
-- **远端源码 zip 重装**：zip 快照安装构建链路改为先构建 `@mindfoldhq/trellis-core`，再构建 CLI，避免 `@mindfoldhq/trellis-core/channel` 等 workspace 二级导出缺少 dist/types 时导致重装失败。
+- **远端源码 zip 重装**：zip 快照安装改为走根 `pnpm build` 统一入口，保持与 clean 端构建顺序一致，避免 `@mindfoldhq/trellis-core/channel` 等 workspace 二级导出缺少 dist/types 时导致重装失败。
 - **开发模式启动**：`run.sh dev` 固定使用 Vite 5173 端口，启动后等待 `http://localhost:5173/` 可访问再打开 pywebview 桌面壳，避免桌面窗口抢先加载 dev server 或端口漂移导致白屏。
 - **项目 Git 快捷面板**：改为项目卡片下方可折叠只读面板，并补充最近提交日期展示。
 

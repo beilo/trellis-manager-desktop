@@ -1021,7 +1021,7 @@ class TrellisManagerOpsTest(unittest.TestCase):
         )
 
     def test_install_from_zip_builds_core_before_cli(self) -> None:
-        """zip 快照安装会先构建 workspace core，再构建 CLI。"""
+        """zip 快照安装会使用根 build 统一构建 core 和 CLI。"""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "source"
@@ -1046,8 +1046,7 @@ class TrellisManagerOpsTest(unittest.TestCase):
                 [command.command for command in report.commands],
                 [
                     ["pnpm", "install"],
-                    ["pnpm", "--filter", "@mindfoldhq/trellis-core", "build"],
-                    ["pnpm", "--filter", "@mindfoldhq/trellis", "build"],
+                    ["pnpm", "build"],
                 ],
             )
 
