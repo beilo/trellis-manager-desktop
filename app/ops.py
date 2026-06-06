@@ -4,6 +4,8 @@ import json
 import platform
 import shutil
 import stat
+import tempfile
+import urllib.request
 import zipfile
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -617,6 +619,8 @@ def install_from_zip(
         # 安装依赖并构建
         for command, message, timeout in [
             (["pnpm", "install"], "安装依赖失败。", 600),
+            # CLI 依赖 workspace core 的 dist/types，zip 快照没有预构建产物，必须先生成 core。
+            (["pnpm", "--filter", "@mindfoldhq/trellis-core", "build"], "构建 Trellis Core 失败。", 600),
             (["pnpm", "--filter", "@mindfoldhq/trellis", "build"], "构建 Trellis CLI 失败。", 600),
         ]:
             result = runner.run(command, cwd=repo_dir, timeout=timeout)
@@ -1343,6 +1347,93 @@ def github_branch_url(official_repo_url: str, distribution_branch: str) -> str |
         base = url.removeprefix("git@github.com:").removesuffix(".git")
         return f"https://github.com/{base}/tree/{distribution_branch}"
     return None
+
+
+def github_branch_zip_url(official_repo_url: str, distribution_branch: str) -> str | None:
+    """从官方仓库 URL 和分发分支推导 GitHub codeload zip 下载地址。"""
+    url = official_repo_url.strip()
+    if url.startswith("https://github.com/"):
+        # https://github.com/owner/repo.git → owner/repo
+        base = url.removeprefix("https://github.com/").removesuffix(".git")
+    elif url.startswith("git@github.com:"):
+        # git@github.com:owner/repo.git → owner/repo
+        base = url.removeprefix("git@github.com:").removesuffix(".git")
+    else:
+        return None
+    # 验证 base 格式为 owner/repo，拒绝空或畸形输入
+    parts = base.strip("/").split("/")
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        return None
+    return f"https://codeload.github.com/{parts[0]}/{parts[1]}/zip/refs/heads/{distribution_branch}"
+
+
+def install_from_remote_zip(
+    repo_dir: Path = DEFAULT_REPO_DIR,
+    replace: bool = False,
+    official_repo_url: str = OFFICIAL_REPO_URL,
+    distribution_branch: str = DISTRIBUTION_BRANCH,
+    runner: CommandRunner | None = None,
+) -> OperationReport:
+    """从远端 GitHub 下载源码 zip 并安装/重装 Trellis 工具仓库。"""
+    runner = runner or CommandRunner()
+    repo_dir = repo_dir.expanduser()
+
+    # 1. 推导下载 URL
+    download_url = github_branch_zip_url(official_repo_url, distribution_branch)
+    if download_url is None:
+        raise OperationError("当前官方仓库 URL 不是 GitHub 仓库，无法下载源码 zip。")
+
+    # 2. 下载 zip 到临时目录
+    temp_base = repo_dir.parent / ".manager-temp"
+    temp_base.mkdir(parents=True, exist_ok=True)
+    zip_path = temp_base / f"remote-{datetime.now().strftime('%Y%m%d%H%M%S')}.zip"
+
+    try:
+        _download_zip(download_url, zip_path)
+    except Exception:
+        # 清理可能的不完整文件
+        if zip_path.exists():
+            zip_path.unlink()
+        raise OperationError("下载源码 zip 失败，请检查网络连接或分发分支配置。")
+
+    try:
+        # 3. 复用现有本地 zip 安装流程
+        report = install_from_zip(
+            zip_path,
+            repo_dir,
+            replace=replace,
+            distribution_branch=distribution_branch,
+            runner=runner,
+        )
+        # 4. 包装返回结果，语义改为远端 zip
+        return OperationReport(
+            title="从远端 zip 安装 Trellis 工具仓库",
+            ok=report.ok,
+            message=report.message,
+            commands=report.commands,
+            details={
+                "repo": str(repo_dir),
+                "source_type": "zip_snapshot",
+                "branch": distribution_branch,
+                "download_url": download_url,
+                "zip": str(zip_path),
+            },
+        )
+    finally:
+        # 5. 清理下载的临时 zip（无论成功失败）
+        if zip_path.exists():
+            zip_path.unlink()
+
+
+def _download_zip(url: str, dest: Path) -> None:
+    """下载 URL 到本地文件，仅用于 Manager 内部推导的 codeload URL。"""
+    try:
+        with urllib.request.urlopen(url, timeout=120) as response:  # noqa: S310 — URL 由内部推导，非用户输入
+            dest.write_bytes(response.read())
+    except urllib.error.URLError as error:
+        raise OperationError(f"下载源码 zip 失败：{error}") from error
+    except OSError as error:
+        raise OperationError(f"写入 zip 文件失败：{error}") from error
 
 
 def _raise_if_failed(result: CommandResult, message: str, commands: list[CommandResult]) -> None:

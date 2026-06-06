@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ExternalLink, FileArchive, Loader2 } from 'lucide-react'
+import { CloudDownload, ExternalLink, FileArchive, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { AppInput } from './AppInput'
@@ -15,9 +15,11 @@ interface RepoCardProps {
   onCheck: () => void
   onInstall: () => void
   onInstallFromZip: (zipPath: string, replace: boolean) => void
+  onInstallFromRemoteZip: (replace: boolean) => void
   onCreateWrappers: () => void
   onPathChange: (path: string) => void
   githubBranchUrl: string | null
+  githubBranchZipUrl: string | null
 }
 
 export function RepoCard({
@@ -28,18 +30,21 @@ export function RepoCard({
   onCheck,
   onInstall,
   onInstallFromZip,
+  onInstallFromRemoteZip,
   onCreateWrappers,
   onPathChange,
   githubBranchUrl,
+  githubBranchZipUrl,
 }: RepoCardProps) {
   const [zipPath, setZipPath] = useState('')
   const [zipBusy, setZipBusy] = useState(false)
+  const [remoteZipBusy, setRemoteZipBusy] = useState(false)
 
   const repoStatus = status?.status ?? 'unknown'
   const sourceType = status?.source_type
 
   let stepStatus: StepStatus = 'idle'
-  if (busy || loading || zipBusy) {
+  if (busy || loading || zipBusy || remoteZipBusy) {
     stepStatus = 'loading'
   } else if (status) {
     if (status.status === 'ok') stepStatus = 'ok'
@@ -80,6 +85,19 @@ export function RepoCard({
     }
   }
 
+  const handleRemoteZipInstall = async () => {
+    const replace = status?.exists === true
+    if (replace && !window.confirm('工具仓库已存在，确认用远端 zip 替换当前源码？')) {
+      return
+    }
+    setRemoteZipBusy(true)
+    try {
+      await onInstallFromRemoteZip(replace)
+    } finally {
+      setRemoteZipBusy(false)
+    }
+  }
+
   return (
     <Card className="premium-card">
       <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
@@ -91,7 +109,7 @@ export function RepoCard({
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-          <Button variant="outline" size="sm" onClick={onCheck} disabled={loading || busy || zipBusy}>
+          <Button variant="outline" size="sm" onClick={onCheck} disabled={loading || busy || zipBusy || remoteZipBusy}>
             {loading && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {loading ? '检查中…' : '检查仓库'}
           </Button>
@@ -99,13 +117,13 @@ export function RepoCard({
             variant="destructive"
             size="sm"
             onClick={onInstall}
-            disabled={busy || zipBusy || isZipSnapshot}
+            disabled={busy || zipBusy || remoteZipBusy || isZipSnapshot}
             title={isZipSnapshot ? '当前为 zip 快照安装，请使用下方 zip 重装更新' : undefined}
           >
             {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {busy ? '处理中…' : '下载 / 更新并构建'}
           </Button>
-          <Button variant="outline" size="sm" onClick={onCreateWrappers} disabled={busy || zipBusy}>
+          <Button variant="outline" size="sm" onClick={onCreateWrappers} disabled={busy || zipBusy || remoteZipBusy}>
             创建命令入口
           </Button>
         </div>
@@ -138,6 +156,40 @@ export function RepoCard({
           </div>
         )}
 
+        {/* 远端 zip 安装区域 */}
+        <div className="flex flex-col gap-2 border rounded-lg p-3 bg-muted/30">
+          <div className="flex items-center gap-2">
+            <CloudDownload className="size-4 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground">远端源码 zip 安装</span>
+          </div>
+          {githubBranchZipUrl ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                从当前分发分支下载源码 zip 并安装，适合 Git clone/pull 不稳定时使用。
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleRemoteZipInstall}
+                  disabled={remoteZipBusy || zipBusy || busy}
+                >
+                  {remoteZipBusy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
+                  {remoteZipBusy
+                    ? '下载并安装中…'
+                    : needsReinstall
+                      ? '下载 zip 并重装'
+                      : '下载 zip 并安装'}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              当前官方仓库 URL 不是 GitHub 仓库，无法使用远端 zip 安装。
+            </p>
+          )}
+        </div>
+
         {/* 本地 zip 安装区域 */}
         <div className="flex flex-col gap-2 border rounded-lg p-3 bg-muted/30">
           <div className="flex items-center gap-2">
@@ -155,7 +207,7 @@ export function RepoCard({
               variant="secondary"
               size="sm"
               onClick={handleZipInstall}
-              disabled={!zipPath.trim() || zipBusy || busy}
+              disabled={!zipPath.trim() || zipBusy || busy || remoteZipBusy}
             >
               {zipBusy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
               {zipBusy ? '安装中…' : needsReinstall ? '重装' : '安装'}

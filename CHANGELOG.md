@@ -4,6 +4,17 @@
 
 ### Added
 
+- **远端源码 zip 下载安装**：工具链页新增「远端源码 zip 安装」区域，Manager 根据当前配置的官方 Git 仓库地址和分发分支自动推导 GitHub codeload zip 下载地址，一键下载并复用现有 zip 安装安全流程完成安装或重装。
+  - 后端新增 `github_branch_zip_url` 推导 codeload zip 下载地址（支持 HTTPS/SSH GitHub URL，非 GitHub 返回 None）
+  - 后端新增 `_download_zip` 使用标准库下载 zip 到临时目录，120s 超时
+  - 后端新增 `install_from_remote_zip` 下载远端 zip 后复用 `install_from_zip` 安全安装流程（解压校验 / 备份替换 / pnpm install & build），返回 `source_type=zip_snapshot` 和 `download_url`
+  - 后端 API 新增 `get_github_branch_zip_url` 和 `install_from_remote_zip` 桥接方法
+  - 前端 `RepoCard` 新增「远端源码 zip 安装」区域，按钮文案随仓库状态变化（下载 zip 并安装 / 下载 zip 并重装 / 下载并安装中…），非 GitHub 仓库显示不可用提示
+  - 前端 `api.ts` 新增 `getGithubBranchZipUrl` 和 `installFromRemoteZip`，旧后端兼容降级
+  - 前端 `App` 新增 `githubBranchZipUrl` 状态和 `handleInstallFromRemoteZip` 处理流程
+  - 测试新增 8 个用例：URL 推导（HTTPS/SSH/非 GitHub/畸形/无.git 后缀）、远程安装（非 GitHub 阻断、下载失败清理、replace=False 阻断）
+  - PRD：`docs/specs/2026-06-05-remote-source-zip-install-prd.md`
+  - 实施计划：`docs/specs/2026-06-05-remote-source-zip-install-implement.md`
 - **本地源码 zip 安装**：工具链页新增「本地源码 zip 安装」区域，支持从本地 zip 文件安装/重装 Trellis 工具源码，无需 GitHub 访问。
   - 后端新增 `is_valid_source_tree` 验证源码树（不依赖 `.git`）、`_safe_extract_zip` 安全解压（拒绝路径遍历）、`install_from_zip` 安装/重装（备份-交换-清理策略）
   - 后端新增 `github_branch_url` 从仓库 URL 推导 GitHub 分支页面链接
@@ -22,6 +33,8 @@
 
 ### Changed
 
+- **远端源码 zip 重装**：zip 快照安装构建链路改为先构建 `@mindfoldhq/trellis-core`，再构建 CLI，避免 `@mindfoldhq/trellis-core/channel` 等 workspace 二级导出缺少 dist/types 时导致重装失败。
+- **开发模式启动**：`run.sh dev` 固定使用 Vite 5173 端口，启动后等待 `http://localhost:5173/` 可访问再打开 pywebview 桌面壳，避免桌面窗口抢先加载 dev server 或端口漂移导致白屏。
 - **项目 Git 快捷面板**：改为项目卡片下方可折叠只读面板，并补充最近提交日期展示。
 
 ### Added

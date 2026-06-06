@@ -34,9 +34,11 @@ from app.ops import (
     ensure_wrappers_and_path,
     get_project_git_summary as get_project_git_summary_op,
     github_branch_url,
+    github_branch_zip_url,
     init_project,
     inspect_project,
     install_from_zip,
+    install_from_remote_zip,
     install_or_update_tool_repo,
     is_supported_macos,
     preview_project_update as preview_project_update_op,
@@ -296,6 +298,24 @@ class TrellisAPI:
             self._settings["official_repo_url"],
             self._settings["distribution_branch"],
         )
+
+    def get_github_branch_zip_url(self) -> str | None:
+        """返回当前配置对应的 GitHub codeload zip 下载地址。"""
+        return github_branch_zip_url(
+            self._settings["official_repo_url"],
+            self._settings["distribution_branch"],
+        )
+
+    def install_from_remote_zip(self, repo_path: str, replace: bool = False) -> dict[str, Any]:
+        """从远端 GitHub 下载源码 zip 并安装/重装 Trellis 工具仓库。"""
+        report = install_from_remote_zip(
+            Path(repo_path).expanduser(),
+            replace=replace,
+            official_repo_url=self._settings["official_repo_url"],
+            distribution_branch=self._settings["distribution_branch"],
+            runner=self._runner,
+        )
+        return report.to_log_entry()
 
     def ensure_wrappers_and_path(self, path: str) -> dict[str, Any]:
         report = ensure_wrappers_and_path(repo_dir=Path(path).expanduser())

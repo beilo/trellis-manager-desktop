@@ -132,6 +132,7 @@ export default function App() {
   const [repoLoading, setRepoLoading] = useState(false)
   const [repoBusy, setRepoBusy] = useState(false)
   const [githubBranchUrl, setGithubBranchUrl] = useState<string | null>(null)
+  const [githubBranchZipUrl, setGithubBranchZipUrl] = useState<string | null>(null)
 
   // 命令入口
   const [cmdItems, setCmdItems] = useState<ToolCommandStatus[]>([])
@@ -313,6 +314,21 @@ export default function App() {
       checkRepoInner(repoPath)
     } catch (err) {
       addLog('error', `失败：本地 zip 安装 - ${err}`)
+    } finally {
+      setRepoBusy(false)
+    }
+  }, [repoPath, addLog, addLogs, checkRepoInner])
+
+  const handleInstallFromRemoteZip = useCallback(async (replace: boolean) => {
+    setRepoBusy(true)
+    addLog('task', replace ? '== 从远端 zip 重装工具仓库 ==' : '== 从远端 zip 安装工具仓库 ==')
+    try {
+      await api.saveRepoPath(repoPath)
+      const report = await api.installFromRemoteZip(repoPath, replace)
+      addLogs(...reportToLogs(report))
+      checkRepoInner(repoPath)
+    } catch (err) {
+      addLog('error', `失败：远端 zip 安装 - ${err}`)
     } finally {
       setRepoBusy(false)
     }
@@ -659,16 +675,18 @@ export default function App() {
 
     void (async () => {
       try {
-        const [pi, cfg, logs, branchUrl] = await Promise.all([
+        const [pi, cfg, logs, branchUrl, branchZipUrl] = await Promise.all([
           api.getPlatformInfo(),
           api.getConfig(),
           api.getLogs(),
           api.getGithubBranchUrl().catch(() => null),
+          api.getGithubBranchZipUrl().catch(() => null),
         ])
 
         setPlatformInfo(pi)
         setRepoPath(cfg.trellis_repo)
         setGithubBranchUrl(branchUrl)
+        setGithubBranchZipUrl(branchZipUrl)
 
         const initialProjects = dedupeProjects(
           cfg.projects.length > 0 ? cfg.projects : cfg.recent_projects,
@@ -778,9 +796,11 @@ export default function App() {
               onCheck={handleCheckRepo}
               onInstall={handleInstallRepo}
               onInstallFromZip={handleInstallFromZip}
+              onInstallFromRemoteZip={handleInstallFromRemoteZip}
               onCreateWrappers={handleCreateWrappers}
               onPathChange={setRepoPath}
               githubBranchUrl={githubBranchUrl}
+              githubBranchZipUrl={githubBranchZipUrl}
             />
 
             <SettingsCard

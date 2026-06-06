@@ -5,6 +5,7 @@ import stat
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,8 +35,11 @@ from app.ops import (  # noqa: E402
     ensure_wrappers_and_path,
     ensure_zshrc_path,
     get_project_git_summary,
+    github_branch_zip_url,
     inspect_project,
     init_project,
+    install_from_zip,
+    install_from_remote_zip,
     install_or_update_tool_repo,
     list_outdated_projects,
     batch_update_projects,
@@ -972,6 +976,138 @@ class TrellisManagerOpsTest(unittest.TestCase):
             loaded = load_config(config_file)
             self.assertEqual(loaded.developer_name, "bob")
             self.assertEqual(loaded.init_platforms, ["claude-code", "cursor"])
+
+    # ── github_branch_zip_url 测试 ──
+
+    def test_github_branch_zip_url_https(self) -> None:
+        """HTTPS GitHub URL 推导 codeload zip 地址。"""
+        url = github_branch_zip_url(
+            "https://github.com/beilo/Trellis.git",
+            "custom/beilo-v0.5-rc",
+        )
+        self.assertEqual(
+            url,
+            "https://codeload.github.com/beilo/Trellis/zip/refs/heads/custom/beilo-v0.5-rc",
+        )
+
+    def test_github_branch_zip_url_ssh(self) -> None:
+        """SSH GitHub URL 推导 codeload zip 地址。"""
+        url = github_branch_zip_url(
+            "git@github.com:beilo/Trellis.git",
+            "custom/beilo-v0.5-rc",
+        )
+        self.assertEqual(
+            url,
+            "https://codeload.github.com/beilo/Trellis/zip/refs/heads/custom/beilo-v0.5-rc",
+        )
+
+    def test_github_branch_zip_url_non_github(self) -> None:
+        """非 GitHub URL 返回 None。"""
+        self.assertIsNone(github_branch_zip_url("https://gitlab.com/foo/bar.git", "main"))
+
+    def test_github_branch_zip_url_invalid_base(self) -> None:
+        """畸形 GitHub URL 返回 None。"""
+        self.assertIsNone(github_branch_zip_url("https://github.com/onlyowner", "main"))
+
+    def test_github_branch_zip_url_https_no_git_suffix(self) -> None:
+        """HTTPS URL 不带 .git 后缀也能推导。"""
+        url = github_branch_zip_url(
+            "https://github.com/beilo/Trellis",
+            "main",
+        )
+        self.assertEqual(
+            url,
+            "https://codeload.github.com/beilo/Trellis/zip/refs/heads/main",
+        )
+
+    def test_install_from_zip_builds_core_before_cli(self) -> None:
+        """zip 快照安装会先构建 workspace core，再构建 CLI。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            (source / "packages" / "cli" / "bin").mkdir(parents=True)
+            (source / "packages" / "cli" / "bin" / "trellis.js").write_text("#!/usr/bin/env node\n", encoding="utf-8")
+            (source / "packages" / "cli" / "package.json").write_text(json.dumps({"name": "@mindfoldhq/trellis"}), encoding="utf-8")
+            (source / "packages" / "core").mkdir(parents=True)
+            (source / "packages" / "core" / "package.json").write_text(json.dumps({"name": "@mindfoldhq/trellis-core"}), encoding="utf-8")
+            (source / "package.json").write_text(json.dumps({"name": "trellis-root"}), encoding="utf-8")
+            (source / "pnpm-lock.yaml").write_text("", encoding="utf-8")
+
+            zip_path = root / "trellis.zip"
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                for path in source.rglob("*"):
+                    archive.write(path, path.relative_to(root))
+
+            runner = FakeRunner()
+            report = install_from_zip(zip_path, root / "Trellis", runner=runner)  # type: ignore[arg-type]
+
+            self.assertTrue(report.ok)
+            self.assertEqual(
+                [command.command for command in report.commands],
+                [
+                    ["pnpm", "install"],
+                    ["pnpm", "--filter", "@mindfoldhq/trellis-core", "build"],
+                    ["pnpm", "--filter", "@mindfoldhq/trellis", "build"],
+                ],
+            )
+
+    # ── install_from_remote_zip 测试 ──
+
+    def test_install_from_remote_zip_non_github_rejects(self) -> None:
+        """非 GitHub 仓库 URL 时抛中文错误。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "Trellis"
+
+            with self.assertRaises(OperationError) as error:
+                install_from_remote_zip(
+                    repo,
+                    official_repo_url="https://gitlab.com/foo/bar.git",
+                    distribution_branch="main",
+                )
+
+            self.assertIn("不是 GitHub 仓库", str(error.exception))
+
+    def test_install_from_remote_zip_download_failure_cleans_temp(self) -> None:
+        """下载失败时不创建或污染目标工具仓库。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "Trellis"
+
+            with self.assertRaises(OperationError):
+                # 使用一个无法访问的 GitHub URL 来模拟下载失败
+                install_from_remote_zip(
+                    repo,
+                    official_repo_url="https://github.com/beilo/nonexistent-repo-xyz.git",
+                    distribution_branch="nonexistent-branch",
+                )
+
+            # 目标目录不应被创建
+            self.assertFalse(repo.exists())
+            # 临时目录应被清理（manager-temp 目录可能存在但不应有残留文件）
+            temp_base = repo.parent / ".manager-temp"
+            temp_zip_files = list(temp_base.glob("remote-*.zip")) if temp_base.exists() else []
+            self.assertEqual(len(temp_zip_files), 0)
+
+    def test_install_from_remote_zip_replace_false_blocks_when_exists(self) -> None:
+        """目标已存在且 replace=False 时阻断。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "Trellis"
+            repo.mkdir()
+            # 创建有效的 Trellis 源码树结构
+            (repo / "packages" / "cli" / "bin").mkdir(parents=True)
+            (repo / "packages" / "cli" / "bin" / "trellis.js").write_text("#!/usr/bin/env node\n", encoding="utf-8")
+            (repo / "packages" / "cli" / "package.json").write_text(json.dumps({"version": "0.1.0"}), encoding="utf-8")
+            (repo / "package.json").write_text("{}", encoding="utf-8")
+            (repo / "pnpm-lock.yaml").write_text("", encoding="utf-8")
+
+            with self.assertRaises(OperationError) as error:
+                install_from_remote_zip(
+                    repo,
+                    replace=False,
+                    official_repo_url="https://github.com/beilo/Trellis.git",
+                    distribution_branch="custom/beilo-v0.5-rc",
+                )
+
+            self.assertIn("已存在", str(error.exception))
 
 
 if __name__ == "__main__":

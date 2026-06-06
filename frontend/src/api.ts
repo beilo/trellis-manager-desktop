@@ -47,6 +47,8 @@ interface PywebviewAPI {
   install_or_update_tool_repo(path: string): Promise<OperationReport>
   install_from_zip?(zip_path: string, repo_path: string, replace?: boolean): Promise<OperationReport>
   get_github_branch_url?(): Promise<string | null>
+  get_github_branch_zip_url?(): Promise<string | null>
+  install_from_remote_zip?(repo_path: string, replace?: boolean): Promise<OperationReport>
   ensure_wrappers_and_path(path: string): Promise<OperationReport>
   inspect_project(path: string): Promise<ProjectStatus>
   get_project_git_summary(path: string): Promise<GitSummary>
@@ -244,6 +246,22 @@ export const api = {
       return null
     }
     return bridge.get_github_branch_url()
+  },
+
+  async getGithubBranchZipUrl(): Promise<string | null> {
+    const bridge = await getApi()
+    if (typeof bridge.get_github_branch_zip_url !== 'function') {
+      return null
+    }
+    return bridge.get_github_branch_zip_url()
+  },
+
+  async installFromRemoteZip(repoPath: string, replace: boolean = false): Promise<OperationReport> {
+    const bridge = await getApi()
+    if (typeof bridge.install_from_remote_zip !== 'function') {
+      throw new Error('当前后端未提供远端 zip 安装接口。')
+    }
+    return bridge.install_from_remote_zip(repoPath, replace)
   },
 
   async ensureWrappersAndPath(path: string): Promise<OperationReport> {
