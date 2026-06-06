@@ -12,7 +12,7 @@ export function TaskListItem({ task, selected, onSelect }: TaskListItemProps) {
   return (
     <div
       className={`flex flex-col gap-1 p-2 rounded cursor-pointer transition-colors ${
-        selected ? 'bg-muted' : 'hover:bg-muted/50'
+        selected ? 'bg-accent' : 'hover:bg-accent/70'
       } ${task.error ? 'bg-red-50 border border-red-200' : ''}`}
       onClick={() => onSelect(task)}
     >

@@ -53,7 +53,7 @@ function ArchiveMonthSection({
   return (
     <div>
       <div
-        className="flex items-center gap-2 p-2 cursor-pointer hover:bg-muted/50 rounded text-sm"
+        className="flex items-center gap-2 p-2 cursor-pointer hover:bg-accent/70 rounded text-sm"
         onClick={() => setOpen(!open)}
       >
         {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}

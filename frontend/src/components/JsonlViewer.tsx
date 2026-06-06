@@ -60,7 +60,7 @@ export function JsonlViewer({ result, loading = false, onLoadMore }: JsonlViewer
               <div key={physicalIndex} className="rounded-lg border bg-background">
                 <button
                   type="button"
-                  className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-muted/40"
+                  className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-accent/60"
                   onClick={() => toggle(physicalIndex)}
                 >
                   {open ? <ChevronDown className="mt-0.5 size-4 shrink-0" /> : <ChevronRight className="mt-0.5 size-4 shrink-0" />}

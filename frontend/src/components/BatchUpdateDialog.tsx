@@ -185,7 +185,7 @@ export function BatchUpdateDialog({
                   const path = project.path as string
                   const checked = selected.has(path)
                   return (
-                    <label key={path} className="flex cursor-pointer items-start gap-3 px-4 py-3 text-sm hover:bg-muted/35">
+                    <label key={path} className="flex cursor-pointer items-start gap-3 px-4 py-3 text-sm hover:bg-accent/60">
                       <input
                         type="checkbox"
                         checked={checked}

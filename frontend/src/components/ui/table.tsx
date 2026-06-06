@@ -57,7 +57,8 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        // 选中行 hover 继续保持浅色选中底色，避免深色 muted 把状态反馈压暗。
+        "border-b transition-colors hover:bg-accent/60 has-aria-expanded:bg-accent data-[state=selected]:bg-accent data-[state=selected]:hover:bg-accent",
         className
       )}
       {...props}

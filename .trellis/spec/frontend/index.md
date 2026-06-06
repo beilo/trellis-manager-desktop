@@ -22,6 +22,7 @@
 
 - 修改 `frontend/src/components/` 前，先确认被用到的基础组件默认 variant 是否自带 hover / active / aria 状态样式。
 - 修改选中态、hover 态、展开态等交互样式时，同时检查基础组件类名和业务组件类名的合并结果。
+- 新增或启用 Tailwind 语义色类名前，确认 `frontend/src/index.css` 的 `@theme inline` 已导出对应 `--color-*` token。
 - 对固定格式控件，例如 Header segmented tabs，保持宽高稳定，避免 hover 或选中态改变布局尺寸。
 
 ---

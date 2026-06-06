@@ -23,7 +23,7 @@ export function KanbanTaskCard({ task, projectName, onClick }: KanbanTaskCardPro
       onClick={onClick}
       className={cn(
         'flex w-full items-center gap-3 rounded-xl border border-border/40 bg-card px-3.5 py-2.5 text-left text-card-foreground',
-        'transition-all duration-200 hover:border-border/80 hover:bg-muted/30 hover:shadow-md hover:-translate-y-[0.5px]',
+        'transition-all duration-200 hover:border-border/80 hover:bg-accent/60 hover:shadow-md hover:-translate-y-[0.5px]',
         'focus:outline-none focus:ring-2 focus:ring-ring/20',
       )}
       aria-label={`打开任务 ${task.title}`}

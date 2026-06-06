@@ -123,7 +123,7 @@ export function ProjectList({
                     'transition-all duration-150 border border-transparent border-l-[3px]',
                     selected
                       ? 'bg-primary/5 border-primary/5 border-l-primary shadow-[0_2px_8px_rgba(204,120,92,0.03)]'
-                      : 'border-l-transparent hover:bg-muted/65 hover:border-border/10',
+                      : 'border-l-transparent hover:bg-accent/70 hover:border-border/10',
                   )}
                 >
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5 pr-6">

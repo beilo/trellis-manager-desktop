@@ -35,7 +35,7 @@ function FileTreeNode({
         size="sm"
         className={cn(
           'h-8 w-full justify-start gap-1 overflow-hidden px-2 text-left font-normal',
-          selected && 'bg-muted text-foreground',
+          selected && 'bg-accent text-foreground hover:bg-accent',
           !isDirectory && !isPreviewableFile(item) && 'text-muted-foreground',
         )}
         style={{ paddingLeft: `${level * 12 + 8}px` }}

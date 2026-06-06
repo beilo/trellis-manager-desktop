@@ -90,7 +90,7 @@ export function ProjectCard({
               "transition-all duration-200 font-semibold",
               recommendInit
                 ? "bg-primary hover:bg-primary/90 text-primary-foreground border-transparent shadow-sm active:scale-95"
-                : "border border-border bg-background hover:bg-muted"
+                : "border border-border bg-background hover:bg-accent"
             )}
           >
             {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
@@ -104,7 +104,7 @@ export function ProjectCard({
               "transition-all duration-200 font-semibold",
               recommendUpdate
                 ? "bg-primary hover:bg-primary/90 text-primary-foreground border-transparent shadow-sm active:scale-95"
-                : "border border-border bg-background hover:bg-muted"
+                : "border border-border bg-background hover:bg-accent"
             )}
           >
             {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
