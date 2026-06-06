@@ -4,6 +4,7 @@
 
 ### Added
 
+- **前端 UI 规范**：新增 `.trellis/spec/frontend/`，记录 Header segmented tabs 的选中态 hover 覆盖约定，避免 `Button ghost` 默认 hover 背景覆盖滑块选中态。
 - **远端源码 zip 下载安装**：工具链页新增「远端源码 zip 安装」区域，Manager 根据当前配置的官方 Git 仓库地址和分发分支自动推导 GitHub codeload zip 下载地址，一键下载并复用现有 zip 安装安全流程完成安装或重装。
   - 后端新增 `github_branch_zip_url` 推导 codeload zip 下载地址（支持 HTTPS/SSH GitHub URL，非 GitHub 返回 None）
   - 后端新增 `_download_zip` 使用标准库下载 zip 到临时目录，120s 超时
@@ -33,6 +34,7 @@
 
 ### Changed
 
+- **Header Tab 选中 hover 态**：选中的看板 / 工具链 / 项目入口 hover 时保持透明背景和主色文字，避免 Button ghost 默认深色 `muted` 背景覆盖滑块选中态。
 - **远端源码 zip 重装**：zip 快照安装改为走根 `pnpm build` 统一入口，保持与 clean 端构建顺序一致，避免 `@mindfoldhq/trellis-core/channel` 等 workspace 二级导出缺少 dist/types 时导致重装失败。
 - **开发模式启动**：`run.sh dev` 固定使用 Vite 5173 端口，启动后等待 `http://localhost:5173/` 可访问再打开 pywebview 桌面壳，避免桌面窗口抢先加载 dev server 或端口漂移导致白屏。
 - **项目 Git 快捷面板**：改为项目卡片下方可折叠只读面板，并补充最近提交日期展示。

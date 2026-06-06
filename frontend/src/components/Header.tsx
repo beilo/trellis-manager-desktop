@@ -16,6 +16,9 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
   const platformLabel = platformInfo?.is_macos ? 'macOS' : '非 macOS'
   const platformStatus: Status = platformInfo?.is_macos ? 'ok' : 'error'
   const pythonLabel = platformInfo ? `Python ${platformInfo.python_version}` : 'Python 3'
+  // 选中项背景由滑块承载，hover 需要保持透明，避免 ghost 默认深色底压住选中态。
+  const activeTabClass = 'text-primary font-semibold hover:bg-transparent hover:text-primary'
+  const inactiveTabClass = 'text-muted-foreground hover:text-foreground hover:bg-transparent'
 
   return (
     <div className="flex flex-col gap-4 pb-4 lg:flex-row lg:items-start lg:justify-between">
@@ -44,9 +47,7 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
             onClick={() => onTabChange('kanban')}
             className={cn(
               'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
-              activeTab === 'kanban'
-                ? 'text-primary font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-transparent',
+              activeTab === 'kanban' ? activeTabClass : inactiveTabClass,
             )}
           >
             <LayoutDashboard data-icon="inline-start" />
@@ -58,9 +59,7 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
             onClick={() => onTabChange('toolchain')}
             className={cn(
               'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
-              activeTab === 'toolchain'
-                ? 'text-primary font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-transparent',
+              activeTab === 'toolchain' ? activeTabClass : inactiveTabClass,
             )}
           >
             <Wrench data-icon="inline-start" />
@@ -72,9 +71,7 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
             onClick={() => onTabChange('projects')}
             className={cn(
               'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
-              activeTab === 'projects'
-                ? 'text-primary font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-transparent',
+              activeTab === 'projects' ? activeTabClass : inactiveTabClass,
             )}
           >
             <FolderGit2 data-icon="inline-start" />
