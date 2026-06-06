@@ -42,7 +42,7 @@ export function JsonlViewer({ result, loading = false, onLoadMore }: JsonlViewer
   return (
     <div className="flex flex-col gap-3">
       {result.errors.length > 0 && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
           {result.errors.length} 行解析失败：{result.errors.map((error) => `第 ${error.line} 行`).join('、')}
         </div>
       )}

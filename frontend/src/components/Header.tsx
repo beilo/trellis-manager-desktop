@@ -46,7 +46,7 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
               'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
               activeTab === 'kanban'
                 ? 'text-primary font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-transparent dark:hover:bg-transparent',
+                : 'text-muted-foreground hover:text-foreground hover:bg-transparent',
             )}
           >
             <LayoutDashboard data-icon="inline-start" />
@@ -60,7 +60,7 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
               'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
               activeTab === 'toolchain'
                 ? 'text-primary font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-transparent dark:hover:bg-transparent',
+                : 'text-muted-foreground hover:text-foreground hover:bg-transparent',
             )}
           >
             <Wrench data-icon="inline-start" />
@@ -74,7 +74,7 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
               'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
               activeTab === 'projects'
                 ? 'text-primary font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-transparent dark:hover:bg-transparent',
+                : 'text-muted-foreground hover:text-foreground hover:bg-transparent',
             )}
           >
             <FolderGit2 data-icon="inline-start" />

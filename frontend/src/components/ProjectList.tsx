@@ -65,7 +65,7 @@ export function ProjectList({
   onRemove,
 }: ProjectListProps) {
   return (
-    <aside className="rounded-xl border border-border/40 bg-card/80 dark:bg-card/75 backdrop-blur-md text-card-foreground overflow-hidden shadow-sm">
+    <aside className="rounded-xl border border-border/40 bg-card/80 backdrop-blur-md text-card-foreground overflow-hidden shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-sm font-semibold text-foreground">项目列表</span>
@@ -122,7 +122,7 @@ export function ProjectList({
                     'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-left cursor-pointer',
                     'transition-all duration-150 border border-transparent border-l-[3px]',
                     selected
-                      ? 'bg-primary/5 dark:bg-primary/10 border-primary/5 dark:border-primary/10 border-l-primary shadow-[0_2px_8px_rgba(204,120,92,0.03)]'
+                      ? 'bg-primary/5 border-primary/5 border-l-primary shadow-[0_2px_8px_rgba(204,120,92,0.03)]'
                       : 'border-l-transparent hover:bg-muted/65 hover:border-border/10',
                   )}
                 >

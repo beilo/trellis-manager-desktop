@@ -31,10 +31,10 @@ function projectName(path: string): string {
 
 function statusBadge(result: ProjectUpdateResult) {
   if (result.skipped) {
-    return { label: '跳过', className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' }
+    return { label: '跳过', className: 'border-amber-500/30 bg-amber-500/10 text-amber-700' }
   }
   if (result.ok) {
-    return { label: '成功', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' }
+    return { label: '成功', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700' }
   }
   return { label: '失败', className: 'border-destructive/30 bg-destructive/10 text-destructive' }
 }
@@ -207,7 +207,7 @@ export function BatchUpdateDialog({
                             {project.trellis_version ?? '-'} → {project.latest_version ?? '-'}
                           </span>
                           {project.dirty && (
-                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-300">
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-700">
                               {allowDirty ? 'dirty 允许更新' : 'dirty 默认跳过'}
                             </span>
                           )}
@@ -230,7 +230,7 @@ export function BatchUpdateDialog({
           )}
 
           {running && (
-            <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-700 dark:text-cyan-300">
+            <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-700">
               <div className="flex items-center gap-2">
                 <Loader2 className="size-4 animate-spin" />
                 <span>

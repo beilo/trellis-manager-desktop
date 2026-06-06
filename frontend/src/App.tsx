@@ -107,21 +107,6 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [batchUpdateOpen, setBatchUpdateOpen] = useState(false)
 
-  // ── 系统主题自动同步 ──
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
-      if (e.matches) {
-        document.documentElement.classList.add('dark')
-      } else {
-        document.documentElement.classList.remove('dark')
-      }
-    }
-    handleChange(mediaQuery)
-    mediaQuery.addEventListener('change', handleChange)
-    return () => mediaQuery.removeEventListener('change', handleChange)
-  }, [])
-
   // 环境检查
   const [envItems, setEnvItems] = useState<EnvironmentItem[]>([])
   const [envLoading, setEnvLoading] = useState(false)

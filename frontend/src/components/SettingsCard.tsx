@@ -173,7 +173,7 @@ export function SettingsCard({ repoPath, onSaved, onClose }: SettingsCardProps) 
         </div>
 
         {feedback && (
-          <div className={`rounded-lg border px-3 py-2 text-sm ${feedback.ok ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-destructive/30 bg-destructive/10 text-destructive'}`}>
+          <div className={`rounded-lg border px-3 py-2 text-sm ${feedback.ok ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700' : 'border-destructive/30 bg-destructive/10 text-destructive'}`}>
             {feedback.message}
           </div>
         )}

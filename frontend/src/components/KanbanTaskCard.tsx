@@ -4,8 +4,8 @@ import type { TrellisTaskItem, TrellisTaskStatus } from '@/types'
 const STATUS_DOT_CLASS: Record<TrellisTaskStatus, string> = {
   planning: 'bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.6)]',
   in_progress: 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)] animate-pulse',
-  completed: 'bg-slate-400 dark:bg-slate-500',
-  done: 'bg-slate-400 dark:bg-slate-500',
+  completed: 'bg-slate-400',
+  done: 'bg-slate-400',
   unknown: 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]',
 }
 

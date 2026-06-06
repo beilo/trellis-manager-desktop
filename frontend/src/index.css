@@ -3,8 +3,6 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
-@custom-variant dark (&:is(.dark *));
-
 @theme inline {
   --font-sans: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "EB Garamond", "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", Georgia, serif;
@@ -46,28 +44,6 @@
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
-}
-
-.dark {
-  --background: 40 7% 9%; /* #181715 */
-  --foreground: 44 29% 97%; /* #faf9f5 */
-  --card: 36 7% 14%; /* #252320 */
-  --card-foreground: 44 29% 97%;
-  --popover: 36 7% 14%;
-  --popover-foreground: 44 29% 97%;
-  --primary: 15 52% 58%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 36 7% 14%;
-  --secondary-foreground: 44 29% 97%;
-  --muted: 42 5% 61%; /* #a09d96 */
-  --muted-foreground: 42 5% 61%;
-  --accent: 45 7% 11%; /* #1f1e1b */
-  --accent-foreground: 44 29% 97%;
-  --destructive: 0 54% 52%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 36 7% 14%;
-  --input: 36 7% 14%;
-  --ring: 15 52% 58%;
 }
 
 * {

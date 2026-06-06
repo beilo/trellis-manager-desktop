@@ -74,7 +74,7 @@ export function UpdatePreviewDialog({
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-5 py-4">
-          <div className={`rounded-xl border px-3 py-2 text-sm ${preview.ok ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-destructive/30 bg-destructive/10 text-destructive'}`}>
+          <div className={`rounded-xl border px-3 py-2 text-sm ${preview.ok ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700' : 'border-destructive/30 bg-destructive/10 text-destructive'}`}>
             <div className="flex items-start gap-2">
               {preview.ok ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : <XCircle className="mt-0.5 size-4 shrink-0" />}
               <span>{preview.message}</span>
@@ -99,7 +99,7 @@ export function UpdatePreviewDialog({
           </div>
 
           {preview.would_run_migrations && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                 <span>dry-run 输出包含 migration 信号，请确认业务项目当前状态后再执行真实 Update。</span>
@@ -138,7 +138,7 @@ export function UpdatePreviewDialog({
                 className="mt-1 size-4 accent-primary"
                 disabled={confirming}
               />
-              <span className="text-amber-800 dark:text-amber-200">
+              <span className="text-amber-800">
                 我确认该项目存在未提交变更，仍要执行 <span className="font-mono">tl update --force</span>。
               </span>
             </label>
