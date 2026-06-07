@@ -70,3 +70,36 @@ Filled backend Trellis spec from current app/tests patterns, updated bootstrap c
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Paseo reusable workflow configuration
+
+**Date**: 2026-06-07
+**Task**: Paseo reusable workflow configuration
+**Branch**: `main`
+
+### Summary
+
+Added project-local Paseo workflow config, executor, agent skill, tests, changelog, and backend spec contract for reusable PRD -> Implement -> Review orchestration.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `db0fabe` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
