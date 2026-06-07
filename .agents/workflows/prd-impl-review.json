@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "name": "prd-impl-review",
+  "description": "Use Codex to plan Trellis artifacts, Claude Code to implement, and Codex to review the implementation.",
+  "inputs": {
+    "task": {
+      "required": true,
+      "description": "User requirement to plan and implement."
+    },
+    "cwd": {
+      "required": true,
+      "description": "Repository working directory."
+    },
+    "taskDir": {
+      "required": false,
+      "default": ".trellis/tasks/current",
+      "description": "Optional Trellis task directory when the caller wants artifact checks against a concrete task."
+    }
+  },
+  "steps": [
+    {
+      "id": "plan",
+      "title": "Plan Trellis artifacts",
+      "provider": "codex/gpt-5.4",
+      "cwd": "{{cwd}}",
+      "wait": true,
+      "stopOnFailure": true,
+      "waitTimeout": "45m",
+      "prompt": "You are the planning agent. Create or update Trellis prd.md, design.md, and implement.md for this requirement. Stay in planning only; do not write implementation code. Requirement:\\n{{task}}\\n\\nUse the repository's Trellis terminology exactly: prd.md for requirements, design.md for technical design, implement.md for execution planning. Return a concise summary of the artifacts you wrote."
+    },
+    {
+      "id": "implement",
+      "title": "Implement from Trellis artifacts",
+      "provider": "claude/opus",
+      "cwd": "{{cwd}}",
+      "wait": true,
+      "stopOnFailure": true,
+      "waitTimeout": "2h",
+      "prompt": "You are the implementation agent. Read the current Trellis prd.md, design.md, and implement.md before editing. Implement only the documented scope. Do not expand the task. Preserve unrelated dirty files. Return changed files, validation commands, and any remaining risks."
+    },
+    {
+      "id": "review",
+      "title": "Review implementation against Trellis artifacts",
+      "provider": "codex/gpt-5.4",
+      "cwd": "{{cwd}}",
+      "wait": true,
+      "stopOnFailure": true,
+      "waitTimeout": "45m",
+      "prompt": "You are the review agent. Review the implementation against Trellis prd.md, design.md, and implement.md. Lead with bugs, regressions, requirement drift, and missing tests. Do not summarize unless there are no findings. Return blocking findings first, then residual risk."
+    }
+  ],
+  "outputs": {
+    "stepFields": [
+      "id",
+      "title",
+      "provider",
+      "cwd",
+      "status",
+      "agentId",
+      "summary"
+    ]
+  }
+}
