@@ -196,3 +196,30 @@ default: "bg-accent"
 ```tsx
 default: "bg-accent"
 ```
+
+---
+
+## Scenario: Task Detail Tabs Show User-Facing Lifecycle Documents
+
+### 1. Scope / Trigger
+
+- Trigger: Adding or changing tabs in `TaskDetail`.
+- Applies to the primary task detail tab row.
+
+### 2. Contracts
+
+- Primary task detail tabs should stay focused on user-facing task lifecycle views: `详情`、`PRD`、`Design`、`Implement`.
+- Do not place agent-internal execution context, JSONL audit trails, or debug records in the primary tab row.
+- If internal context viewing is needed later, expose it through a weaker debug/more entry instead of mixing it with lifecycle documents.
+
+### 3. Good / Base / Bad Cases
+
+- Good: Users see only `详情 / PRD / Design / Implement` in the main task detail tabs.
+- Base: Missing PRD / Design / Implement tabs remain disabled with `文件不存在`.
+- Bad: `Context` appears next to PRD / Design / Implement and suggests internal agent logs are first-class task documents.
+
+### 4. Tests Required
+
+- Static check: `TaskDetailTab` is `detail | prd | design | implement`.
+- Static check: `TaskDetail` does not render a `TabsTrigger` with value `context`.
+- Build and lint must pass after narrowing the tab union.

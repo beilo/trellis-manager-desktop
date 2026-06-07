@@ -39,6 +39,7 @@
 - **前端交互浅色底**：基础 Button / Badge、默认 Tabs 容器，以及项目列表、任务列表、文件树、JSONL 行、批量更新行和看板卡片的交互背景从深色 `muted` 改为浅色 `accent`。
 - **Accent 主题 token**：`index.css` 的 Tailwind theme 导出 `--color-accent` / `--color-accent-foreground`，确保 `bg-accent` 等类实际生成浅色样式。
 - **前端 UI code-spec**：补充 Tailwind 语义色 token 契约，明确 `:root` 源变量和 `@theme inline --color-*` 导出必须同时存在，并记录对应静态/浏览器检查。
+- **任务详情主 Tab 精简**：移除 Context 入口，任务详情主 Tab 只保留详情、PRD、Design、Implement，避免 agent 内部上下文记录干扰核心任务文档阅读。
 - **远端源码 zip 重装**：zip 快照安装改为走根 `pnpm build` 统一入口，保持与 clean 端构建顺序一致，避免 `@mindfoldhq/trellis-core/channel` 等 workspace 二级导出缺少 dist/types 时导致重装失败。
 - **开发模式启动**：`run.sh dev` 固定使用 Vite 5173 端口，启动后等待 `http://localhost:5173/` 可访问再打开 pywebview 桌面壳，避免桌面窗口抢先加载 dev server 或端口漂移导致白屏。
 - **项目 Git 快捷面板**：改为项目卡片下方可折叠只读面板，并补充最近提交日期展示。

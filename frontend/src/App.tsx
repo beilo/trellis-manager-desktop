@@ -857,7 +857,7 @@ export default function App() {
                     projectPath={selectedProject}
                     projectStatus={selectedProjectStatus}
                     highlightTaskPath={highlightTaskPath}
-                    highlightedTaskInitialTab={highlightTaskPath ? 'context' : 'detail'}
+                    highlightedTaskInitialTab="detail"
                     cursorStatus={cursorStatus}
                     cursorLoading={cursorLoading}
                     onOpenCursor={handleOpenCursor}

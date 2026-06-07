@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Copy,
   FolderOpen,
@@ -12,29 +12,23 @@ import {
   Terminal,
   Send,
   Loader2,
-  RefreshCw,
   SquareArrowOutUpRight,
 } from 'lucide-react'
 import { api } from '@/api'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { FileTreePanel } from './FileTreePanel'
-import { flattenPreviewableFiles } from './fileTreeUtils'
-import { JsonlViewer } from './JsonlViewer'
 import { MarkdownViewer } from './MarkdownViewer'
 import { TaskStatusBadge } from './TaskStatusBadge'
 import type {
   EnvironmentItem,
-  FileTreeItem,
-  JsonlFileResult,
   OperationReport,
   TaskDocumentKind,
   TextFileResult,
   TrellisTaskItem,
 } from '@/types'
 
-export type TaskDetailTab = 'detail' | 'prd' | 'design' | 'implement' | 'context'
+export type TaskDetailTab = 'detail' | 'prd' | 'design' | 'implement'
 
 interface TaskDetailProps {
   task: TrellisTaskItem
@@ -82,24 +76,6 @@ function helmDisabledReason(task: TrellisTaskItem, helmStatus: EnvironmentItem |
   if (helmLoading) return '正在检查 Helm'
   if (!helmStatus?.ok) return '未安装 Helm'
   return null
-}
-
-function isJsonlResult(result: TextFileResult | JsonlFileResult | null): result is JsonlFileResult {
-  return Boolean(result && 'items' in result)
-}
-
-function taskLocalPath(task: TrellisTaskItem, item: FileTreeItem): string {
-  const prefix = `tasks/${task.dir_name}/`
-  return item.path.startsWith(prefix) ? item.path.slice(prefix.length) : item.path
-}
-
-function preferredContextFile(files: FileTreeItem[]): FileTreeItem | null {
-  const orderedNames = ['implement.jsonl', 'research.jsonl', 'check.jsonl', 'debug.jsonl']
-  for (const name of orderedNames) {
-    const found = files.find((file) => file.path.endsWith(`/${name}`) || file.path === name)
-    if (found) return found
-  }
-  return files.find((file) => file.path.includes('/research/') && file.name.endsWith('.md')) ?? files[0] ?? null
 }
 
 function DocumentPane({ task, doc, label }: { task: TrellisTaskItem; doc: TaskDocumentKind; label: string }) {
@@ -172,151 +148,6 @@ function DocumentPane({ task, doc, label }: { task: TrellisTaskItem; doc: TaskDo
   )
 }
 
-function TaskContextPane({ task }: { task: TrellisTaskItem }) {
-  const [tree, setTree] = useState<FileTreeItem[]>([])
-  const [selected, setSelected] = useState<FileTreeItem | null>(null)
-  const [content, setContent] = useState<TextFileResult | JsonlFileResult | null>(null)
-  const [loadingTree, setLoadingTree] = useState(false)
-  const [loadingFile, setLoadingFile] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const loadTree = useCallback(async () => {
-    if (task.archived) {
-      setTree([])
-      setSelected(null)
-      setContent(null)
-      setError('归档任务暂不支持 Context 读取。')
-      return
-    }
-    setLoadingTree(true)
-    setError(null)
-    try {
-      const result = await api.listTaskContextFiles(task.path)
-      if (!result.ok) {
-        setTree([])
-        setSelected(null)
-        setContent(null)
-        setError(result.error?.message ?? 'Context 文件列表读取失败。')
-        return
-      }
-      const files = flattenPreviewableFiles(result.items).filter((item) => {
-        const local = taskLocalPath(task, item)
-        return ['implement.jsonl', 'research.jsonl', 'check.jsonl', 'debug.jsonl'].includes(local)
-          || (local.startsWith('research/') && item.name.endsWith('.md'))
-      })
-      setTree(result.items)
-      setSelected(preferredContextFile(files))
-    } catch (err) {
-      setError(`Context 文件列表读取失败：${err}`)
-    } finally {
-      setLoadingTree(false)
-    }
-  }, [task])
-
-  useEffect(() => {
-    void Promise.resolve().then(loadTree)
-  }, [loadTree])
-
-  useEffect(() => {
-    let cancelled = false
-    void Promise.resolve().then(() => {
-      if (cancelled) return
-      if (!selected) {
-        setContent(null)
-        return
-      }
-      setLoadingFile(true)
-      setContent(null)
-      void api.readTaskContextFile(task.path, taskLocalPath(task, selected), 200, 0)
-        .then((result) => {
-          if (!cancelled) setContent(result)
-        })
-        .catch((err: unknown) => {
-          if (!cancelled) {
-            setContent({
-              ok: false,
-              path: null,
-              content: null,
-              size: null,
-              truncated: false,
-              error: { code: 'bridge_error', message: errorMessage(err) },
-            })
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setLoadingFile(false)
-        })
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [selected, task])
-
-  const loadMore = async () => {
-    if (!selected || !isJsonlResult(content) || content.next_offset == null) return
-    setLoadingFile(true)
-    try {
-      const next = await api.readTaskContextFile(task.path, taskLocalPath(task, selected), content.limit, content.next_offset)
-      if (isJsonlResult(next)) {
-        setContent({
-          ...next,
-          items: [...content.items, ...next.items],
-          errors: [...content.errors, ...next.errors],
-          offset: content.offset,
-        })
-      }
-    } finally {
-      setLoadingFile(false)
-    }
-  }
-
-  return (
-    <div className="grid min-h-[26rem] gap-3 md:grid-cols-[16rem_minmax(0,1fr)]">
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold">Context 文件</span>
-          <Button type="button" variant="ghost" size="sm" onClick={loadTree} disabled={loadingTree}>
-            <RefreshIcon loading={loadingTree} />
-          </Button>
-        </div>
-        <FileTreePanel items={tree} selectedPath={selected?.path ?? null} onSelect={setSelected} />
-      </div>
-      <div className="rounded-lg border bg-background p-3">
-        {/* 这里只展示当前选中文件的 `.trellis/` 相对路径，方便任务上下文定位，不参与读取逻辑。 */}
-        {selected && (
-          <div className="mb-3 border-b pb-2 text-xs text-muted-foreground break-all">
-            当前路径：.trellis/{selected.path}
-          </div>
-        )}
-        {error ? (
-          <div className="rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
-        ) : loadingFile && !content ? (
-          <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            正在读取文件…
-          </div>
-        ) : isJsonlResult(content) ? (
-          <JsonlViewer result={content} loading={loadingFile} onLoadMore={loadMore} />
-        ) : content?.ok ? (
-          <ScrollArea className="h-[24rem] pr-3">
-            <MarkdownViewer content={content.content ?? ''} />
-          </ScrollArea>
-        ) : content ? (
-          <div className="rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {content.error?.message ?? '读取文件失败。'}
-          </div>
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">请选择 Context 文件</div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function RefreshIcon({ loading }: { loading: boolean }) {
-  return loading ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />
-}
-
 export function TaskDetail({
   task,
   projectPath,
@@ -372,9 +203,6 @@ export function TaskDetail({
               {item.label}
             </TabsTrigger>
           ))}
-          <TabsTrigger value="context" disabled={task.archived} title={task.archived ? '归档任务暂不支持 Context' : 'Context'}>
-            Context
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="detail" className="flex flex-col gap-4">
@@ -571,10 +399,6 @@ export function TaskDetail({
             )}
           </TabsContent>
         ))}
-
-        <TabsContent value="context">
-          <TaskContextPane task={task} />
-        </TabsContent>
       </Tabs>
     </div>
   )
