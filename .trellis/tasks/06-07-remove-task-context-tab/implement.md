@@ -8,7 +8,7 @@
 - [x] 更新 `CHANGELOG.md`。
 - [x] 判断是否需要更新前端 code-spec。
 - [x] 运行 `npm run build`、`npm run lint`、`git diff --check`。
-- [ ] 只暂存 Context 移除相关 hunk 并提交。
+- [x] 只暂存 Context 移除相关 hunk 并提交。
 - [ ] finish-work 归档任务并记录 journal。
 
 ## Validation
