@@ -83,29 +83,19 @@ export function ProjectCard({
             {loading ? '检查中…' : '检查项目'}
           </Button>
           <Button
+            variant="default"
             size="sm"
             onClick={onInit}
-            disabled={busy || !projectPath}
-            className={cn(
-              "transition-all duration-200 font-semibold",
-              recommendInit
-                ? "bg-primary hover:bg-primary/90 text-primary-foreground border-transparent shadow-sm active:scale-95"
-                : "border border-border bg-background hover:bg-accent"
-            )}
+            disabled={busy || !projectPath || !recommendInit}
           >
             {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {busy ? '处理中…' : 'Init'}
           </Button>
           <Button
+            variant="default"
             size="sm"
             onClick={onUpdate}
-            disabled={busy || !projectPath}
-            className={cn(
-              "transition-all duration-200 font-semibold",
-              recommendUpdate
-                ? "bg-primary hover:bg-primary/90 text-primary-foreground border-transparent shadow-sm active:scale-95"
-                : "border border-border bg-background hover:bg-accent"
-            )}
+            disabled={busy || !projectPath || !recommendUpdate}
           >
             {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {busy ? '处理中…' : 'Update'}
@@ -135,7 +125,7 @@ export function ProjectCard({
         <div className="flex flex-col gap-1.5">
           <span className="text-xs text-muted-foreground font-medium">项目路径</span>
           <div
-            className="min-h-10 rounded-lg border bg-muted/35 px-3 py-2 font-mono text-sm text-foreground"
+            className="min-h-10 rounded-lg border bg-accent/50 px-3 py-2 font-mono text-sm text-foreground"
             title={projectPath ?? undefined}
           >
             <span className="block truncate">

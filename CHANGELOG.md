@@ -5,6 +5,24 @@
 ### Added
 
 - **前端 UI 规范**：新增 `.trellis/spec/frontend/`，记录 Header segmented tabs 的选中态 hover 覆盖约定，避免 `Button ghost` 默认 hover 背景覆盖滑块选中态。
+
+### Changed
+
+- **ProjectCard 按钮统一 variant**：Init / Update 按钮移除条件 `className` 颜色覆盖，统一使用 `variant="default"`，不需要时通过 `disabled` 表达状态，与其他按钮规范一致。
+- **默认分发分支**：工具仓库默认分发分支从 `custom/beilo-v0.5-rc` 调整为 `sync/v0.6.0-rc`，新配置和前端恢复默认会跟随 v0.6 RC 发布线。
+- **Header Tab 选中 hover 态**：选中的看板 / 工具链 / 项目入口 hover 时保持透明背景和主色文字，避免 Button ghost 默认深色 `muted` 背景覆盖滑块选中态。
+- **按钮式当前态 hover**：Tabs 当前项、工具链设置平台多选按钮和表格选中行 hover 时保持当前态颜色，避免基础组件默认 hover 覆盖选中反馈。
+- **前端交互浅色底**：基础 Button / Badge、默认 Tabs 容器，以及项目列表、任务列表、文件树、JSONL 行、批量更新行和看板卡片的交互背景从深色 `muted` 改为浅色 `accent`。
+- **Accent 主题 token**：`index.css` 的 Tailwind theme 导出 `--color-accent` / `--color-accent-foreground`，确保 `bg-accent` 等类实际生成浅色样式。
+- **前端 UI code-spec**：补充 Tailwind 语义色 token 契约，明确 `:root` 源变量和 `@theme inline --color-*` 导出必须同时存在，并记录对应静态/浏览器检查。
+- **代码与信息块浅色底**：命令复制行、Markdown code/pre、JSONL 预览、工具仓库路径、项目路径、Git 指标卡、zip 安装区和卡片 / 表格 footer 等静态信息背景改用浅色 `accent` 系列，避免实色 `muted` 深灰块破坏亮色主题。
+- **任务 Markdown 详情布局**：任务管理双栏、任务详情卡片、Tab 内容和 Markdown 表格容器补充 `min-w-0` / 内部滚动约束，避免点击 PRD / Design / Implement 后长 Markdown 内容撑大右侧面板。
+- **任务详情主 Tab 精简**：移除 Context 入口，任务详情主 Tab 只保留详情、PRD、Design、Implement，避免 agent 内部上下文记录干扰核心任务文档阅读。
+- **移除暗色主题，固定亮色主题**：删除系统主题自动同步、`.dark` CSS 变量块和所有 `dark:` Tailwind 类名，应用不再随系统 `prefers-color-scheme` 切换主题。
+
+### Added
+
+- **Trellis 后端规范初始化**：填充 `.trellis/spec/backend/` 的目录结构、持久化、错误处理、日志和质量规范，基于当前 `app/` 与 `tests/` 的真实模块边界、JSON 持久化、CommandRunner 白名单、安全文件读取、watcher 降级和 unittest/FakeRunner 测试模式记录约定。
 - **远端源码 zip 下载安装**：工具链页新增「远端源码 zip 安装」区域，Manager 根据当前配置的官方 Git 仓库地址和分发分支自动推导 GitHub codeload zip 下载地址，一键下载并复用现有 zip 安装安全流程完成安装或重装。
   - 后端新增 `github_branch_zip_url` 推导 codeload zip 下载地址（支持 HTTPS/SSH GitHub URL，非 GitHub 返回 None）
   - 后端新增 `_download_zip` 使用标准库下载 zip 到临时目录，120s 超时
@@ -34,12 +52,6 @@
 
 ### Changed
 
-- **Header Tab 选中 hover 态**：选中的看板 / 工具链 / 项目入口 hover 时保持透明背景和主色文字，避免 Button ghost 默认深色 `muted` 背景覆盖滑块选中态。
-- **按钮式当前态 hover**：Tabs 当前项、工具链设置平台多选按钮和表格选中行 hover 时保持当前态颜色，避免基础组件默认 hover 覆盖选中反馈。
-- **前端交互浅色底**：基础 Button / Badge、默认 Tabs 容器，以及项目列表、任务列表、文件树、JSONL 行、批量更新行和看板卡片的交互背景从深色 `muted` 改为浅色 `accent`。
-- **Accent 主题 token**：`index.css` 的 Tailwind theme 导出 `--color-accent` / `--color-accent-foreground`，确保 `bg-accent` 等类实际生成浅色样式。
-- **前端 UI code-spec**：补充 Tailwind 语义色 token 契约，明确 `:root` 源变量和 `@theme inline --color-*` 导出必须同时存在，并记录对应静态/浏览器检查。
-- **任务详情主 Tab 精简**：移除 Context 入口，任务详情主 Tab 只保留详情、PRD、Design、Implement，避免 agent 内部上下文记录干扰核心任务文档阅读。
 - **远端源码 zip 重装**：zip 快照安装改为走根 `pnpm build` 统一入口，保持与 clean 端构建顺序一致，避免 `@mindfoldhq/trellis-core/channel` 等 workspace 二级导出缺少 dist/types 时导致重装失败。
 - **开发模式启动**：`run.sh dev` 固定使用 Vite 5173 端口，启动后等待 `http://localhost:5173/` 可访问再打开 pywebview 桌面壳，避免桌面窗口抢先加载 dev server 或端口漂移导致白屏。
 - **项目 Git 快捷面板**：改为项目卡片下方可折叠只读面板，并补充最近提交日期展示。
