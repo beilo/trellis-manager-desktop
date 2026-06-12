@@ -142,3 +142,36 @@ Added project-local Paseo workflow config, executor, agent skill, tests, changel
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: 发包自动化
+
+**Date**: 2026-06-12
+**Task**: 发包自动化
+**Branch**: `main`
+
+### Summary
+
+新增根 package.json 应用版本源、npm release:* 发包入口、Python release helper、版本化 macOS zip、GitHub Release dry-run/replace 门禁、README 流程和 release 单元测试；已归档 06-12-release-automation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d506669` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
