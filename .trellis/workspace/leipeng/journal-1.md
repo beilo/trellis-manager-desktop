@@ -19,7 +19,11 @@ Filled backend Trellis spec from current app/tests patterns, updated bootstrap c
 
 ### Main Changes
 
-(Add details)
+- Added bundled `resources/skills/one-shot-sim/` with `SKILL.md`, `CHANGELOG.md`, and `agents/openai.yaml`.
+- Added post-build sync from bundled skill into `~/.codex/skills/one-shot-sim` and `~/.claude/skills/one-shot-sim`.
+- Updated normal `.app` and standalone PyInstaller packaging to include `resources/`.
+- Added unit coverage for directory/symlink replacement and temp-home skill sync.
+- Documented the bundled global skill sync contract in backend code-spec.
 
 ### Git Commits
 
@@ -27,7 +31,9 @@ Filled backend Trellis spec from current app/tests patterns, updated bootstrap c
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] `python3 -m unittest discover -s tests -p 'test_*.py' -v`
+- [OK] `python3 -m py_compile main.py launcher.py app/*.py scripts/*.py tests/*.py`
+- [OK] `git diff --check`
 
 ### Status
 
@@ -91,6 +97,39 @@ Added project-local Paseo workflow config, executor, agent skill, tests, changel
 | Hash | Message |
 |------|---------|
 | `db0fabe` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 4: 内置 one-shot-sim 技能同步
+
+**Date**: 2026-06-12
+**Task**: 内置 one-shot-sim 技能同步
+**Branch**: `main`
+
+### Summary
+
+桌面端内置 one-shot-sim 技能资源，并在工具仓库安装、更新、zip 重装构建成功后覆盖同步到 Codex 和 Claude Code 全局技能目录；补充打包资源、单元测试和 backend code-spec。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `25a83be` | (see git log) |
 
 ### Testing
 
