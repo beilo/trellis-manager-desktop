@@ -11,6 +11,7 @@ from pathlib import Path
 APP_NAME = "Trellis Manager"
 APP_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIST = APP_ROOT / "frontend" / "dist"
+APP_RESOURCES = APP_ROOT / "resources"
 BUILD_ROOT = APP_ROOT / ".build" / "standalone"
 BUILD_VENV = BUILD_ROOT / ".venv"
 PYINSTALLER_WORK = BUILD_ROOT / "pyinstaller-work"
@@ -95,6 +96,8 @@ def build_app(python: Path) -> None:
             str(PYINSTALLER_SPEC),
             "--add-data",
             f"{FRONTEND_DIST}{os.pathsep}frontend/dist",
+            "--add-data",
+            f"{APP_RESOURCES}{os.pathsep}resources",
             "--hidden-import",
             "webview.platforms.cocoa",
             str(ENTRYPOINT),

@@ -48,6 +48,7 @@ from app.ops import (  # noqa: E402
     project_update_command,
     project_update_preview_command,
     push_task_to_helm,
+    sync_bundled_one_shot_sim_skill,
     update_project,
 )
 from app.runner import CommandResult, CommandRunner  # noqa: E402
@@ -743,6 +744,7 @@ class TrellisManagerOpsTest(unittest.TestCase):
                 official_repo_url="https://example.com/official.git",
                 accelerated_repo_url="https://example.com/mirror.git",
                 distribution_branch="release/custom",
+                global_skill_home_dir=Path(tmp) / "home",
             )
 
             self.assertTrue(report.ok)
@@ -1039,7 +1041,12 @@ class TrellisManagerOpsTest(unittest.TestCase):
                     archive.write(path, path.relative_to(root))
 
             runner = FakeRunner()
-            report = install_from_zip(zip_path, root / "Trellis", runner=runner)  # type: ignore[arg-type]
+            report = install_from_zip(
+                zip_path,
+                root / "Trellis",
+                runner=runner,  # type: ignore[arg-type]
+                global_skill_home_dir=root / "home",
+            )
 
             self.assertTrue(report.ok)
             self.assertEqual(
@@ -1049,6 +1056,36 @@ class TrellisManagerOpsTest(unittest.TestCase):
                     ["pnpm", "build"],
                 ],
             )
+            self.assertEqual(report.details["synced_skill"], "one-shot-sim")
+            self.assertTrue((root / "home" / ".codex" / "skills" / "one-shot-sim" / "SKILL.md").exists())
+            self.assertTrue((root / "home" / ".claude" / "skills" / "one-shot-sim" / "SKILL.md").exists())
+
+    def test_sync_bundled_one_shot_sim_skill_replaces_existing_targets(self) -> None:
+        """内置技能同步应覆盖旧目录和历史 symlink。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "bundled" / "one-shot-sim"
+            source.mkdir(parents=True)
+            (source / "SKILL.md").write_text("new skill\n", encoding="utf-8")
+            (source / "agents").mkdir()
+            (source / "agents" / "openai.yaml").write_text("agent\n", encoding="utf-8")
+
+            home = root / "home"
+            codex_target = home / ".codex" / "skills" / "one-shot-sim"
+            claude_target = home / ".claude" / "skills" / "one-shot-sim"
+            codex_target.mkdir(parents=True)
+            (codex_target / "SKILL.md").write_text("old skill\n", encoding="utf-8")
+            shared = root / "shared"
+            shared.mkdir()
+            claude_target.parent.mkdir(parents=True)
+            claude_target.symlink_to(shared, target_is_directory=True)
+
+            details = sync_bundled_one_shot_sim_skill(source, home)
+
+            self.assertEqual(details["synced_skill"], "one-shot-sim")
+            self.assertFalse(claude_target.is_symlink())
+            self.assertEqual((codex_target / "SKILL.md").read_text(encoding="utf-8"), "new skill\n")
+            self.assertEqual((claude_target / "agents" / "openai.yaml").read_text(encoding="utf-8"), "agent\n")
 
     # ── install_from_remote_zip 测试 ──
 

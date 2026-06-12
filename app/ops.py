@@ -26,6 +26,8 @@ from app.task_snapshot import read_task_snapshot, TrellisTaskItem, TrellisTaskSn
 
 Status = Literal["ok", "warning", "error", "unknown", "info"]
 SourceType = Literal["git", "zip_snapshot", "invalid", "missing"]
+APP_ROOT = Path(__file__).resolve().parents[1]
+BUNDLED_ONE_SHOT_SIM_SKILL = APP_ROOT / "resources" / "skills" / "one-shot-sim"
 
 
 @dataclass(frozen=True)
@@ -511,6 +513,40 @@ def is_valid_source_tree(repo_dir: Path) -> bool:
     return all(marker.exists() for marker in markers)
 
 
+def sync_bundled_one_shot_sim_skill(
+    source_dir: Path = BUNDLED_ONE_SHOT_SIM_SKILL,
+    home_dir: Path | None = None,
+) -> dict[str, str]:
+    """把桌面端内置 one-shot-sim 技能覆盖到 Codex 和 Claude Code 全局目录。"""
+    source_dir = source_dir.expanduser().resolve()
+    if not source_dir.is_dir() or not (source_dir / "SKILL.md").is_file():
+        raise OperationError(f"内置 one-shot-sim 技能不存在或不完整：{source_dir}")
+
+    home_dir = (home_dir or Path.home()).expanduser()
+    targets = {
+        "codex_skill": home_dir / ".codex" / "skills" / "one-shot-sim",
+        "claude_skill": home_dir / ".claude" / "skills" / "one-shot-sim",
+    }
+    for target in targets.values():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        # 目标可能是历史 symlink；先移除入口本身，避免覆盖 shared source。
+        if target.is_symlink() or target.is_file():
+            target.unlink()
+        elif target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(
+            source_dir,
+            target,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store", ".vscode"),
+        )
+    return {
+        "synced_skill": "one-shot-sim",
+        "skill_source": str(source_dir),
+        "codex_skill": str(targets["codex_skill"]),
+        "claude_skill": str(targets["claude_skill"]),
+    }
+
+
 def _safe_extract_zip(zip_path: Path, extract_to: Path) -> Path:
     """安全解压 zip 到临时目录，拒绝路径遍历攻击，返回检测到的源码根目录。"""
     extract_to.mkdir(parents=True, exist_ok=True)
@@ -543,6 +579,7 @@ def install_from_zip(
     replace: bool = False,
     distribution_branch: str = DISTRIBUTION_BRANCH,
     runner: CommandRunner | None = None,
+    global_skill_home_dir: Path | None = None,
 ) -> OperationReport:
     """从本地 zip 安装或重装 Trellis 工具源码。"""
     runner = runner or CommandRunner()
@@ -625,6 +662,8 @@ def install_from_zip(
             commands.append(result)
             _raise_if_failed(result, message, commands)
 
+        skill_details = sync_bundled_one_shot_sim_skill(home_dir=global_skill_home_dir)
+
         # 成功：清理备份和临时目录
         if backup_dir and backup_dir.exists():
             shutil.rmtree(backup_dir)
@@ -639,6 +678,7 @@ def install_from_zip(
                 "zip": str(zip_path),
                 "source_type": "zip_snapshot",
                 "branch": distribution_branch,
+                **skill_details,
             },
         )
     finally:
@@ -762,6 +802,7 @@ def install_or_update_tool_repo(
     official_repo_url: str = OFFICIAL_REPO_URL,
     accelerated_repo_url: str = ACCELERATED_REPO_URL,
     distribution_branch: str = DISTRIBUTION_BRANCH,
+    global_skill_home_dir: Path | None = None,
 ) -> OperationReport:
     runner = runner or CommandRunner()
     repo_dir = repo_dir.expanduser()
@@ -802,12 +843,13 @@ def install_or_update_tool_repo(
         result = runner.run(command, cwd=repo_dir, timeout=timeout)
         commands.append(result)
         _raise_if_failed(result, message, commands)
+    skill_details = sync_bundled_one_shot_sim_skill(home_dir=global_skill_home_dir)
     return OperationReport(
         title="安装或更新 Trellis 工具仓库",
         ok=True,
         message="工具仓库已准备完成。",
         commands=commands,
-        details={"repo": str(repo_dir), "branch": distribution_branch},
+        details={"repo": str(repo_dir), "branch": distribution_branch, **skill_details},
     )
 
 
@@ -1371,10 +1413,13 @@ def install_from_remote_zip(
     official_repo_url: str = OFFICIAL_REPO_URL,
     distribution_branch: str = DISTRIBUTION_BRANCH,
     runner: CommandRunner | None = None,
+    global_skill_home_dir: Path | None = None,
 ) -> OperationReport:
     """从远端 GitHub 下载源码 zip 并安装/重装 Trellis 工具仓库。"""
     runner = runner or CommandRunner()
     repo_dir = repo_dir.expanduser()
+    if repo_dir.exists() and not replace:
+        raise OperationError("工具仓库已存在，如需替换请先确认重装。")
 
     # 1. 推导下载 URL
     download_url = github_branch_zip_url(official_repo_url, distribution_branch)
@@ -1402,6 +1447,7 @@ def install_from_remote_zip(
             replace=replace,
             distribution_branch=distribution_branch,
             runner=runner,
+            global_skill_home_dir=global_skill_home_dir,
         )
         # 4. 包装返回结果，语义改为远端 zip
         return OperationReport(
@@ -1415,6 +1461,10 @@ def install_from_remote_zip(
                 "branch": distribution_branch,
                 "download_url": download_url,
                 "zip": str(zip_path),
+                "synced_skill": report.details.get("synced_skill", ""),
+                "skill_source": report.details.get("skill_source", ""),
+                "codex_skill": report.details.get("codex_skill", ""),
+                "claude_skill": report.details.get("claude_skill", ""),
             },
         )
     finally:

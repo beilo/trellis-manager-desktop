@@ -13,6 +13,7 @@ MACOS = CONTENTS / "MacOS"
 RESOURCES = CONTENTS / "Resources"
 BUNDLE_ROOT = RESOURCES / "trellis-manager-desktop"
 FRONTEND_DIST = APP_ROOT / "frontend" / "dist"
+APP_RESOURCES = APP_ROOT / "resources"
 
 
 def main() -> int:
@@ -39,6 +40,12 @@ def copy_resources() -> None:
     if FRONTEND_DIST.exists():
         # 只把构建后的静态前端放进 .app，避免把 node_modules 打进交付包。
         shutil.copytree(FRONTEND_DIST, BUNDLE_ROOT / "frontend" / "dist")
+    if APP_RESOURCES.exists():
+        shutil.copytree(
+            APP_RESOURCES,
+            BUNDLE_ROOT / "resources",
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store", ".vscode"),
+        )
 
 
 def write_info_plist() -> None:
