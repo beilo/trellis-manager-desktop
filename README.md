@@ -64,7 +64,7 @@ python3 launcher.py
 
 - 默认团队仓库：`https://github.com/beilo/Trellis.git`
 - 默认下载加速：`https://xget.xi-xu.me/gh/beilo/Trellis.git`，失败后回退 GitHub
-- 默认分发分支：`custom/beilo-v0.5-rc`
+- 默认分发分支：`sync/v0.6.0-rc`
 - 默认安装目录：`~/.beilo-trellis/Trellis`
 - 默认命令目录：`~/.beilo-trellis/bin`
 - `tl` 和 `trellis` wrapper 都指向本地工具仓库的 `packages/cli/bin/trellis.js`
@@ -81,7 +81,7 @@ python3 launcher.py
 
 当用户机器无法可靠访问 GitHub 进行 `git clone` 时，可以通过本地源码 zip 安装 Trellis 工具仓库：
 
-1. **维护者流程**：点击工具仓库卡片上的「打开分发分支」链接，在 GitHub 页面下载分支 zip（或通过 `https://codeload.github.com/beilo/Trellis/zip/refs/heads/custom/beilo-v0.5-rc` 获取）
+1. **维护者流程**：点击工具仓库卡片上的「打开分发分支」链接，在 GitHub 页面下载分支 zip（或通过 `https://codeload.github.com/beilo/Trellis/zip/refs/heads/sync/v0.6.0-rc` 获取）
 2. **分享**：将 zip 通过内部渠道分享给团队成员
 3. **安装**：在「本地源码 zip 安装」区域输入 zip 文件路径，点击「安装」
 4. **更新**：zip 安装的工具仓库不能在线 `git pull`，如需更新请选择新的 zip 并点击「重装」

@@ -89,7 +89,7 @@ className={cn(
 - 默认 Tab 容器背景使用 `accent`，不要使用深色 `muted`。
 - `index.css` 的 `@theme inline` 必须导出 `--color-accent` 和 `--color-accent-foreground`，否则 `bg-accent` 只会出现在 class 字符串里，不会生成有效 CSS。
 - 不要在 hover 背景里使用 `muted` 或 `muted/<alpha>`。
-- `muted` 可以继续用于静态面板、代码块、空状态或弱化文字，不作为交互 hover 背景。
+- `muted` 可以继续用于低强调空状态或弱化文字，不作为交互 hover、代码块、命令片段、路径片段、指标卡、card/table footer 或 tablist 背景。
 - 当前态可以使用 `accent`；如果当前态由滑块/下划线承载，hover 应透明或回到当前态。
 
 **Why**: 当前主题的 `muted` 是深灰棕，适合弱化文本，不适合 hover 或 tablist 底色。用它做交互背景会让按钮经过或 Tab 区域突然变暗。
@@ -157,7 +157,8 @@ Required `frontend/src/index.css` shape:
 ### 5. Good / Base / Bad Cases
 
 - Good: `TabsList` default is `bg-accent`, and browser computed background is a light color.
-- Base: Static code blocks or empty states may still use low-alpha `bg-muted/*`.
+- Base: Empty states may still use low-alpha `bg-muted/*` when the intent is visually quiet.
+- Bad: Code snippets or command rows use `bg-muted`, making command text sit on a deep gray block.
 - Bad: DOM shows `bg-accent`, but computed background is transparent because `--color-accent` was not exported.
 
 ### 6. Tests Required
@@ -199,6 +200,77 @@ default: "bg-accent"
 
 ---
 
+## Scenario: Static Code And Information Blocks Use Accent Background
+
+### 1. Scope / Trigger
+
+- Trigger: Rendering command snippets, copied commands, inline code, preformatted JSON / Markdown content, path fields, version cards, Git metric cards, zip install panels, card footers, or table footers.
+- Applies to static information blocks even when they are not hoverable.
+
+### 2. Signatures
+
+Expected class patterns:
+
+```tsx
+<code className="... bg-accent ...">
+<pre className="... bg-accent/40 ...">
+<div className="... bg-accent/50 ...">
+```
+
+Existing examples:
+
+- `TaskDetail` command rows: `bg-accent`
+- `MarkdownViewer` code/pre/table header: `bg-accent` / `bg-accent/50`
+- `JsonlViewer` expanded JSON pre: `bg-accent/40`
+- path fields in `SettingsCard` / `ProjectCard`: `bg-accent/50`
+
+### 3. Contracts
+
+- Do not use solid `bg-muted` for code, command, path, metric, table footer, card footer, or install panel backgrounds.
+- Use `bg-accent` for compact code/command snippets.
+- Use `bg-accent/40` or `bg-accent/50` for larger static information panels.
+- Low-alpha `bg-muted/5` or `bg-muted/20` is allowed only for empty states or deliberately quiet placeholders.
+- Text may still use `text-muted-foreground`; this rule is about background, not foreground.
+
+### 4. Validation & Error Matrix
+
+- `code` with `bg-muted` -> deep gray command/code chip.
+- `font-mono` path field with `bg-muted/35` -> path panel looks disabled or off-theme.
+- `pre` with `bg-muted/40` -> large code block becomes too heavy.
+- empty-state panel with `bg-muted/20` -> allowed if it is not a code/path/info surface.
+
+### 5. Good / Base / Bad Cases
+
+- Good: command copy row uses `bg-accent`, readable and aligned with light theme.
+- Base: empty file tree state uses `bg-muted/20`, because it is quiet placeholder UI.
+- Bad: `<code className="flex-1 text-xs bg-muted ...">` for `task.py current --source`.
+
+### 6. Tests Required
+
+- Static search: `rg "<code[^\\n]*bg-muted|<pre[^\\n]*bg-muted|font-mono[^\\n]*bg-muted|bg-muted[^\\n]*font-mono" frontend/src/components` should not match code/path surfaces.
+- Build: `npm run build`.
+- Browser check: inspect a command snippet or Markdown code block; computed background should be the accent light color, not deep gray.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```tsx
+<code className="flex-1 text-xs bg-muted px-2 py-1 rounded overflow-x-auto">
+  {cmd}
+</code>
+```
+
+#### Correct
+
+```tsx
+<code className="flex-1 text-xs bg-accent px-2 py-1 rounded overflow-x-auto">
+  {cmd}
+</code>
+```
+
+---
+
 ## Scenario: Task Detail Tabs Show User-Facing Lifecycle Documents
 
 ### 1. Scope / Trigger
@@ -223,3 +295,32 @@ default: "bg-accent"
 - Static check: `TaskDetailTab` is `detail | prd | design | implement`.
 - Static check: `TaskDetail` does not render a `TabsTrigger` with value `context`.
 - Build and lint must pass after narrowing the tab union.
+
+---
+
+## Scenario: Markdown Document Panels Stay Width-Constrained
+
+### 1. Scope / Trigger
+
+- Trigger: Rendering PRD / Design / Implement Markdown inside a grid column, card, tab panel, or scroll area.
+- Applies when Markdown may contain long code lines, long paths, wide tables, or unbroken tokens.
+
+### 2. Contracts
+
+- Grid columns containing document previews should use `minmax(0,1fr)` instead of bare `1fr`.
+- Grid items and tab panels that wrap Markdown should include `min-w-0`.
+- Document cards should use `overflow-hidden` when their children own scrolling.
+- Markdown table wrappers should use `min-w-0 overflow-x-auto`.
+- Do not rely only on `overflow-x-auto` inside `pre` / `table`; ancestors with default `min-width:auto` can still stretch the layout.
+
+### 3. Good / Base / Bad Cases
+
+- Good: Task list and Task detail stay 50/50 at desktop width while a PRD table scrolls inside the right panel.
+- Base: Normal paragraphs wrap inside the document card without horizontal scrolling.
+- Bad: Clicking the PRD tab makes `.grid-cols-[1fr_1fr]` widen because Markdown content contributes its intrinsic width.
+
+### 4. Tests Required
+
+- Static check: task detail grid uses `md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]`.
+- Static check: Markdown document wrappers include `min-w-0`.
+- Browser check: open a PRD tab with long Markdown; the right card width should stay equal to the task-list column and overflow should remain inside the preview area.

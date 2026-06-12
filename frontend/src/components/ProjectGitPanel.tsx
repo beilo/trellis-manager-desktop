@@ -80,11 +80,11 @@ export function ProjectGitPanel({ projectPath, projectStatus }: ProjectGitPanelP
           ) : summary ? (
             <>
               <div className="grid gap-2 md:grid-cols-4">
-                <div className="rounded-xl border border-border/30 bg-muted/30 p-3 select-none">
+                <div className="rounded-xl border border-border/30 bg-accent/40 p-3 select-none">
                   <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">分支</div>
                   <div className="mt-1 font-mono text-sm text-foreground truncate" title={summary.branch ?? undefined}>{summary.branch ?? '-'}</div>
                 </div>
-                <div className="rounded-xl border border-border/30 bg-muted/30 p-3 flex items-start justify-between select-none">
+                <div className="rounded-xl border border-border/30 bg-accent/40 p-3 flex items-start justify-between select-none">
                   <div className="min-w-0 flex-1">
                     <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Dirty</div>
                     <div className="mt-1 text-sm font-bold text-foreground truncate">{summary.dirty ? `${summary.dirty_files.length} 个文件` : '干净'}</div>
@@ -96,18 +96,18 @@ export function ProjectGitPanel({ projectPath, projectStatus }: ProjectGitPanelP
                       : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                   )} />
                 </div>
-                <div className="rounded-xl border border-border/30 bg-muted/30 p-3 select-none">
+                <div className="rounded-xl border border-border/30 bg-accent/40 p-3 select-none">
                   <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Ahead</div>
                   <div className="mt-1 text-sm font-bold text-foreground">{summary.ahead ?? '0'}</div>
                 </div>
-                <div className="rounded-xl border border-border/30 bg-muted/30 p-3 select-none">
+                <div className="rounded-xl border border-border/30 bg-accent/40 p-3 select-none">
                   <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Behind</div>
                   <div className="mt-1 text-sm font-bold text-foreground">{summary.behind ?? '0'}</div>
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-xl border border-border/30 overflow-hidden bg-background/35 shadow-sm">
-                  <div className="border-b border-border/30 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/20">Dirty 文件</div>
+                  <div className="border-b border-border/30 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-accent/35">Dirty 文件</div>
                   <ScrollArea className="max-h-36">
                     {summary.dirty_files.length > 0 ? (
                       <ul className="space-y-1 p-3 font-mono text-xs text-muted-foreground">
@@ -119,7 +119,7 @@ export function ProjectGitPanel({ projectPath, projectStatus }: ProjectGitPanelP
                   </ScrollArea>
                 </div>
                 <div className="rounded-xl border border-border/30 overflow-hidden bg-background/35 shadow-sm">
-                  <div className="border-b border-border/30 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/20">最近提交</div>
+                  <div className="border-b border-border/30 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-accent/35">最近提交</div>
                   <ScrollArea className="max-h-36">
                     {summary.recent_commits.length > 0 ? (
                       <div className="flex flex-col gap-2 p-3">

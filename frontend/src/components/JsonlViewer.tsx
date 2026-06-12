@@ -67,7 +67,7 @@ export function JsonlViewer({ result, loading = false, onLoadMore }: JsonlViewer
                   <span className="min-w-0 flex-1 truncate">{recordSummary(item)}</span>
                 </button>
                 {open && (
-                  <pre className="max-h-72 overflow-auto border-t bg-muted/25 p-3 font-mono text-xs leading-5">
+                  <pre className="max-h-72 overflow-auto border-t bg-accent/40 p-3 font-mono text-xs leading-5">
                     {JSON.stringify(item, null, 2)}
                   </pre>
                 )}

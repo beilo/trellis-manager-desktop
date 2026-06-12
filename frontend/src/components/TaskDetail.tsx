@@ -116,9 +116,9 @@ function DocumentPane({ task, doc, label }: { task: TrellisTaskItem; doc: TaskDo
   const content = result?.content ?? ''
 
   return (
-    <div className="flex min-h-[26rem] flex-col gap-3 rounded-lg border bg-background p-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-semibold">{label}</span>
+    <div className="flex min-h-[26rem] min-w-0 flex-col gap-3 overflow-hidden rounded-lg border bg-background p-3">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <span className="min-w-0 truncate text-sm font-semibold">{label}</span>
         <Button
           type="button"
           variant="outline"
@@ -136,8 +136,8 @@ function DocumentPane({ task, doc, label }: { task: TrellisTaskItem; doc: TaskDo
           正在读取文档…
         </div>
       ) : result?.ok ? (
-        <ScrollArea className="h-[24rem] pr-3">
-          <MarkdownViewer content={content} />
+        <ScrollArea className="h-[24rem] min-w-0 overflow-hidden pr-3">
+          <MarkdownViewer content={content} className="min-w-0" />
         </ScrollArea>
       ) : (
         <div className="rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -189,8 +189,8 @@ export function TaskDetail({
       : null
 
   return (
-    <div className="flex flex-col gap-4 p-4 rounded-lg border bg-card">
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TaskDetailTab)}>
+    <div className="flex min-w-0 flex-col gap-4 overflow-hidden rounded-lg border bg-card p-4">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TaskDetailTab)} className="min-w-0">
         <TabsList className="flex w-full flex-wrap justify-start">
           <TabsTrigger value="detail">详情</TabsTrigger>
           {documentTabs.map((item) => (
@@ -205,7 +205,7 @@ export function TaskDetail({
           ))}
         </TabsList>
 
-        <TabsContent value="detail" className="flex flex-col gap-4">
+        <TabsContent value="detail" className="flex min-w-0 flex-col gap-4">
           {/* 错误提示 */}
           {task.error && (
             <div className="p-2 rounded bg-red-50 border border-red-200 text-sm text-red-700">
@@ -290,7 +290,7 @@ export function TaskDetail({
       {task.child_total > 0 && (
         <div className="flex items-center gap-2">
           <span className="text-sm">子任务进度：</span>
-          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+          <div className="flex-1 h-2 bg-accent rounded-full overflow-hidden">
             <div
               className="h-full bg-green-500 transition-all"
               style={{ width: `${(task.child_done / task.child_total) * 100}%` }}
@@ -306,8 +306,8 @@ export function TaskDetail({
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium">下一步动作：</span>
         {commands.map((cmd) => (
-          <div key={cmd} className="flex items-center gap-2">
-            <code className="flex-1 text-xs bg-muted px-2 py-1 rounded overflow-x-auto">
+          <div key={cmd} className="flex min-w-0 items-center gap-2">
+            <code className="min-w-0 flex-1 text-xs bg-accent px-2 py-1 rounded overflow-x-auto">
               {cmd}
             </code>
             <Button size="sm" variant="ghost" onClick={() => copyCommand(cmd)} title="复制">
@@ -389,7 +389,7 @@ export function TaskDetail({
         </TabsContent>
 
         {documentTabs.map((item) => (
-          <TabsContent key={item.value} value={item.value}>
+          <TabsContent key={item.value} value={item.value} className="min-w-0">
             {item.exists ? (
               <DocumentPane task={task} doc={item.doc} label={item.label} />
             ) : (

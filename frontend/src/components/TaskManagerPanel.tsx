@@ -183,29 +183,34 @@ export function TaskManagerPanel({
       )}
 
       {snapshot && (activeTasks.length > 0 || includeArchive) && (
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-4">
-          <TaskList
-            tasks={activeTasks}
-            archivedGroups={snapshot.archived_groups}
-            archiveCounts={snapshot.archive_counts}
-            showArchive={includeArchive}
-            selectedTask={selectedTask}
-            onSelect={setSelectedTask}
-          />
-          {selectedTask && (
-            <TaskDetail
-              task={selectedTask}
-              projectPath={projectPath}
-              initialTab={detailInitialTab}
-              helmStatus={helmStatus}
-              helmLoading={helmLoading}
-              cursorStatus={cursorStatus}
-              cursorLoading={cursorLoading}
-              onOpenDir={(path) => api.openTaskDirectory(path)}
-              onOpenIterm={(path) => api.openInIterm(path)}
-              onOpenCursor={onOpenCursor}
-              onPushHelm={(currentProjectPath, taskPath) => api.pushTaskToHelm(currentProjectPath, taskPath)}
+        // Markdown 文档可能包含长表格或长代码，grid 轨道必须允许子项收缩，否则右侧详情会把两栏布局撑宽。
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="min-w-0">
+            <TaskList
+              tasks={activeTasks}
+              archivedGroups={snapshot.archived_groups}
+              archiveCounts={snapshot.archive_counts}
+              showArchive={includeArchive}
+              selectedTask={selectedTask}
+              onSelect={setSelectedTask}
             />
+          </div>
+          {selectedTask && (
+            <div className="min-w-0">
+              <TaskDetail
+                task={selectedTask}
+                projectPath={projectPath}
+                initialTab={detailInitialTab}
+                helmStatus={helmStatus}
+                helmLoading={helmLoading}
+                cursorStatus={cursorStatus}
+                cursorLoading={cursorLoading}
+                onOpenDir={(path) => api.openTaskDirectory(path)}
+                onOpenIterm={(path) => api.openInIterm(path)}
+                onOpenCursor={onOpenCursor}
+                onPushHelm={(currentProjectPath, taskPath) => api.pushTaskToHelm(currentProjectPath, taskPath)}
+              />
+            </div>
           )}
         </div>
       )}

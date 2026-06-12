@@ -82,15 +82,15 @@ export function UpdatePreviewDialog({
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border bg-muted/20 p-3">
+            <div className="rounded-xl border bg-accent/40 p-3">
               <div className="text-xs text-muted-foreground">当前版本</div>
               <div className="mt-1 font-mono text-sm text-foreground">{formatVersion(preview.trellis_version_before)}</div>
             </div>
-            <div className="rounded-xl border bg-muted/20 p-3">
+            <div className="rounded-xl border bg-accent/40 p-3">
               <div className="text-xs text-muted-foreground">最新版本</div>
               <div className="mt-1 font-mono text-sm text-foreground">{formatVersion(preview.latest_version)}</div>
             </div>
-            <div className="rounded-xl border bg-muted/20 p-3">
+            <div className="rounded-xl border bg-accent/40 p-3">
               <div className="text-xs text-muted-foreground">Migration 风险</div>
               <div className="mt-1 text-sm font-medium text-foreground">
                 {preview.would_run_migrations ? '可能运行 migrations' : '未检测到 migrations'}

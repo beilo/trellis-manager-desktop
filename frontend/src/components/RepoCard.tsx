@@ -157,7 +157,7 @@ export function RepoCard({
         )}
 
         {/* 远端 zip 安装区域 */}
-        <div className="flex flex-col gap-2 border rounded-lg p-3 bg-muted/30">
+        <div className="flex flex-col gap-2 border rounded-lg p-3 bg-accent/40">
           <div className="flex items-center gap-2">
             <CloudDownload className="size-4 text-muted-foreground" />
             <span className="text-xs font-medium text-muted-foreground">远端源码 zip 安装</span>
@@ -191,7 +191,7 @@ export function RepoCard({
         </div>
 
         {/* 本地 zip 安装区域 */}
-        <div className="flex flex-col gap-2 border rounded-lg p-3 bg-muted/30">
+        <div className="flex flex-col gap-2 border rounded-lg p-3 bg-accent/40">
           <div className="flex items-center gap-2">
             <FileArchive className="size-4 text-muted-foreground" />
             <span className="text-xs font-medium text-muted-foreground">本地源码 zip 安装</span>

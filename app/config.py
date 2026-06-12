@@ -8,7 +8,8 @@ from typing import Any
 APP_NAME = "Trellis Manager"
 OFFICIAL_REPO_URL = "https://github.com/beilo/Trellis.git"
 ACCELERATED_REPO_URL = "https://xget.xi-xu.me/gh/beilo/Trellis.git"
-DISTRIBUTION_BRANCH = "custom/beilo-v0.5-rc"
+# 默认分发分支跟随团队当前 RC 发布线，避免新安装继续落到旧 v0.5 定制分支。
+DISTRIBUTION_BRANCH = "sync/v0.6.0-rc"
 
 BASE_DIR = Path.home() / ".beilo-trellis"
 DEFAULT_REPO_DIR = BASE_DIR / "Trellis"

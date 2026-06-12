@@ -93,7 +93,7 @@ class CleanRunner(FakeRunner):
         self.calls.append((normalized, cwd))
         if normalized[:3] == ["git", "status", "--short"]:
             return self._result(normalized, cwd, "")
-        if normalized[:4] == ["git", "fetch", "origin", "custom/beilo-v0.5-rc"]:
+        if normalized[:4] == ["git", "fetch", "origin", DISTRIBUTION_BRANCH]:
             return self._result(normalized, cwd, "")
         if normalized[:4] == ["git", "rev-list", "--left-right", "--count"]:
             return self._result(normalized, cwd, "0\t2\n")
@@ -983,22 +983,22 @@ class TrellisManagerOpsTest(unittest.TestCase):
         """HTTPS GitHub URL 推导 codeload zip 地址。"""
         url = github_branch_zip_url(
             "https://github.com/beilo/Trellis.git",
-            "custom/beilo-v0.5-rc",
+            "sync/v0.6.0-rc",
         )
         self.assertEqual(
             url,
-            "https://codeload.github.com/beilo/Trellis/zip/refs/heads/custom/beilo-v0.5-rc",
+            "https://codeload.github.com/beilo/Trellis/zip/refs/heads/sync/v0.6.0-rc",
         )
 
     def test_github_branch_zip_url_ssh(self) -> None:
         """SSH GitHub URL 推导 codeload zip 地址。"""
         url = github_branch_zip_url(
             "git@github.com:beilo/Trellis.git",
-            "custom/beilo-v0.5-rc",
+            "sync/v0.6.0-rc",
         )
         self.assertEqual(
             url,
-            "https://codeload.github.com/beilo/Trellis/zip/refs/heads/custom/beilo-v0.5-rc",
+            "https://codeload.github.com/beilo/Trellis/zip/refs/heads/sync/v0.6.0-rc",
         )
 
     def test_github_branch_zip_url_non_github(self) -> None:
@@ -1103,7 +1103,7 @@ class TrellisManagerOpsTest(unittest.TestCase):
                     repo,
                     replace=False,
                     official_repo_url="https://github.com/beilo/Trellis.git",
-                    distribution_branch="custom/beilo-v0.5-rc",
+                    distribution_branch="sync/v0.6.0-rc",
                 )
 
             self.assertIn("已存在", str(error.exception))

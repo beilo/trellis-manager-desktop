@@ -10,7 +10,7 @@ const DEFAULT_SETTINGS: ManagerSettings = {
   // 前端重置默认值要与后端 config.py 保持一致，避免加载失败时写回旧仓库源。
   official_repo_url: 'https://github.com/beilo/Trellis.git',
   accelerated_repo_url: 'https://xget.xi-xu.me/gh/beilo/Trellis.git',
-  distribution_branch: 'custom/beilo-v0.5-rc',
+  distribution_branch: 'sync/v0.6.0-rc',
   developer_name: '',
   init_platforms: [],
 }
@@ -114,7 +114,7 @@ export function SettingsCard({ repoPath, onSaved, onClose }: SettingsCardProps) 
       <CardContent className="grid gap-4 pt-0">
         <div className="grid gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">工具仓库路径</span>
-          <div className="rounded-lg border bg-muted/35 px-3 py-2 font-mono text-sm text-muted-foreground" title={repoPath}>
+          <div className="rounded-lg border bg-accent/50 px-3 py-2 font-mono text-sm text-muted-foreground" title={repoPath}>
             {repoPath || '未设置'}
           </div>
         </div>
