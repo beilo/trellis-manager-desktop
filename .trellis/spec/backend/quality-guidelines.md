@@ -192,3 +192,71 @@ install_from_zip(
 ```
 
 同步逻辑必须从桌面端内置资源复制，不依赖 `/Users/am/ai-workspace/shared-skills/...` 这类开发机路径。
+
+## Scenario: 应用发包命令
+
+### 1. Scope / Trigger
+
+- Trigger: 新增或修改 Trellis Manager Desktop 应用版本、打包、GitHub Release 上传命令。
+- 适用范围：根 `package.json` 的 `release:*` scripts、`scripts/release.py`、`scripts/build_app.py`、`scripts/build_standalone_app.py`。
+- 只发布桌面应用本身；不要把 Trellis 工具仓库分发分支或工具仓库源码 zip 混入应用发包语义。
+
+### 2. Signatures
+
+- `npm run release:version -- <semver>`
+- `npm run release:package`
+- `npm run release:package -- --clean`
+- `npm run release:publish -- <semver> [--dry-run] [--replace]`
+- 内部入口：`python3 scripts/release.py <version|package|publish> ...`
+
+### 3. Contracts
+
+- 根 `package.json.version` 是唯一应用版本源。
+- `frontend/package.json.version` 只属于前端私有包，不代表应用版本。
+- `release:version` 自动更新根版本、创建版本提交、创建本地 `v<semver>` tag；提交消息必须遵守 `.commit-suffix.json` 的分支后缀。
+- `release:package` 默认复用 `frontend/node_modules`，执行 `npm install` 和 `npx vite build`；只有显式 `--clean` 才删除前端依赖目录。
+- `release:publish --dry-run` 不得 push、创建 release 或上传 asset。
+- `--replace` 只允许覆盖同名 release asset，不得删除 tag 或整份 release。
+
+### 4. Validation & Error Matrix
+
+- semver 不合法 -> 失败并提示合法格式。
+- 工作区不干净 -> 失败并列出 `git status --short`。
+- 本地 tag 已存在 -> `release:version` 失败。
+- 根版本和命令版本不一致 -> `release:publish` 失败。
+- 缺少版本化 zip -> `release:publish` 失败，不触发远端命令。
+- app bundle `Info.plist` 版本和根版本不一致 -> 失败。
+- zip 产物早于版本提交 -> 失败，要求重新打包。
+- 远端 tag/release/asset 已存在且没有 `--replace` -> 失败。
+- `gh release view` 因非 not-found 原因失败 -> 失败；不要当作 release 不存在。
+
+### 5. Good/Base/Bad Cases
+
+- Good: `release:publish --dry-run` 只打印将执行的 `git` / `gh` 命令，FakeRunner 中不出现 `git push` 或 `gh release create` 调用。
+- Base: `release:package` 生成 `dist/standalone/Trellis Manager-<version>-macos-arm64.zip`，并写入匹配的 `CFBundleShortVersionString`。
+- Bad: 默认发布路径直接使用 `gh release upload --clobber` 覆盖线上 asset，没有显式 `--replace`。
+
+### 6. Tests Required
+
+- semver 校验和 `v` tag 前缀。
+- 根 `package.json.version` 读写。
+- `release:version` 的 `git add` / `git commit` / `git tag` 命令数组和 commit suffix。
+- `release:publish --dry-run` 不调用 push/create/upload。
+- `release:publish --replace` 只使用 `gh release upload ... --clobber`，不调用 `gh release delete`。
+- 构建脚本版本化 zip 路径和 plist 版本写入。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+subprocess.run(f"gh release upload {tag} {zip_path} --clobber", shell=True)
+```
+
+#### Correct
+
+```python
+runner.run(["gh", "release", "upload", tag, str(zip_path), "--clobber"], cwd=root)
+```
+
+发布命令必须用参数数组和 fake runner 覆盖；`--clobber` 只能在显式 `--replace` 时出现。

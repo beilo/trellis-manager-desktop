@@ -131,7 +131,94 @@ open "dist/standalone/Trellis Manager.app"
 可分发压缩包会生成在：
 
 ```bash
-apps/trellis-manager-desktop/dist/standalone/Trellis Manager-macos-arm64.zip
+apps/trellis-manager-desktop/dist/standalone/Trellis Manager-<version>-macos-arm64.zip
+```
+
+## 维护者发包命令
+
+应用版本以根目录 `package.json.version` 为唯一来源。`frontend/package.json.version` 只属于前端私有包，不代表 Trellis Manager Desktop 应用版本；工具仓库的 Trellis 版本和分发分支也不参与本应用发包。
+
+### 1. 更新应用版本
+
+```bash
+npm run release:version -- 0.1.1
+```
+
+这个命令会：
+
+- 校验工作区干净和版本格式
+- 更新根 `package.json.version`
+- 生成版本提交
+- 创建本地 tag，例如 `v0.1.1`
+- 输出下一步打包和 dry-run 发布命令
+
+### 2. 打包应用发布包
+
+```bash
+npm run release:package
+```
+
+这个命令会复用现有 `frontend/node_modules`，执行：
+
+```bash
+cd frontend
+npm install
+npx vite build
+```
+
+然后生成独立 `.app` 和版本化 zip：
+
+```bash
+dist/standalone/Trellis Manager.app
+dist/standalone/Trellis Manager-0.1.1-macos-arm64.zip
+```
+
+只有明确需要修复前端依赖目录时，才使用清理模式：
+
+```bash
+npm run release:package -- --clean
+```
+
+### 3. 发布前检查
+
+```bash
+npm run release:publish -- 0.1.1 --dry-run
+```
+
+dry-run 只校验并打印将执行的 `git` / `gh` 命令，不 push、不创建 release、不上传 asset。
+
+发布前会校验：
+
+- 根 `package.json.version` 等于命令版本
+- 工作区干净
+- 本地 tag 存在
+- `gh auth status` 可用
+- zip 文件名包含版本
+- app bundle `Info.plist` 版本匹配
+- zip 产物晚于版本提交
+
+### 4. 上传 GitHub Release
+
+```bash
+npm run release:publish -- 0.1.1
+```
+
+默认遇到同名远端 tag、release 或 asset 会失败退出。补发同版本 zip 时显式使用：
+
+```bash
+npm run release:publish -- 0.1.1 --replace
+```
+
+`--replace` 只覆盖同名 release asset，不删除 tag，也不删除整份 release。
+
+### 失败恢复
+
+发包命令不会在后续失败时自动回滚版本提交、tag 或 release。按实际情况手动恢复：
+
+```bash
+git tag -d v0.1.1
+git reset --soft HEAD~1
+gh release delete v0.1.1 --cleanup-tag
 ```
 
 ## 打包踩坑记录
@@ -172,7 +259,7 @@ pnpm 的 `.bin` symlink 指向全局 store 的硬链接路径，如果 store 中
 
 **解法**：删掉 `frontend/node_modules` 重新 `npm install`，npm 不用 symlink 机制，不会断裂。
 
-### 一键打包命令（推荐）
+### 底层手工打包命令
 
 ```bash
 cd /Users/am/temp/Trellis/apps/trellis-manager-desktop
@@ -189,7 +276,7 @@ python3 scripts/build_standalone_app.py
 
 # 3. 产出物
 # .app → dist/standalone/Trellis Manager.app
-# .zip → dist/standalone/Trellis Manager-macos-arm64.zip
+# .zip → dist/standalone/Trellis Manager-<version>-macos-arm64.zip
 
 # 4. 打包轻量 .app（不含 Python 运行时，需要系统 Python 3.11+）
 # python3 scripts/build_app.py

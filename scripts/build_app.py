@@ -5,6 +5,11 @@ import shutil
 import stat
 from pathlib import Path
 
+try:
+    from release import read_app_version
+except ModuleNotFoundError:  # pragma: no cover - supports importing as scripts.build_app
+    from scripts.release import read_app_version
+
 APP_ROOT = Path(__file__).resolve().parents[1]
 DIST_DIR = APP_ROOT / "dist"
 APP_DIR = DIST_DIR / "Trellis Manager.app"
@@ -49,13 +54,14 @@ def copy_resources() -> None:
 
 
 def write_info_plist() -> None:
+    version = read_app_version(APP_ROOT)
     payload = {
         "CFBundleDisplayName": "Trellis Manager",
         "CFBundleExecutable": "trellis-manager",
         "CFBundleIdentifier": "cc.beilo.trellis-manager",
         "CFBundleName": "Trellis Manager",
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "0.1.0",
+        "CFBundleShortVersionString": version,
         "LSMinimumSystemVersion": "13.0",
     }
     with (CONTENTS / "Info.plist").open("wb") as file:

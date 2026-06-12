@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import os
 import platform
+import plistlib
 import shutil
 import subprocess
 import sys
 import venv
 from pathlib import Path
+
+try:
+    from release import read_app_version
+except ModuleNotFoundError:  # pragma: no cover - supports importing as scripts.build_standalone_app
+    from scripts.release import read_app_version
 
 APP_NAME = "Trellis Manager"
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +24,6 @@ PYINSTALLER_WORK = BUILD_ROOT / "pyinstaller-work"
 PYINSTALLER_SPEC = BUILD_ROOT / "pyinstaller-spec"
 DIST_ROOT = APP_ROOT / "dist" / "standalone"
 APP_BUNDLE = DIST_ROOT / f"{APP_NAME}.app"
-ZIP_PATH = DIST_ROOT / f"{APP_NAME}-macos-arm64.zip"
 REQUIREMENTS = APP_ROOT / "requirements.txt"
 ENTRYPOINT = APP_ROOT / "launcher.py"
 
@@ -29,9 +34,10 @@ def main() -> int:
     python = ensure_build_venv()
     install_build_dependencies(python)
     build_app(python)
-    create_zip()
+    write_bundle_version(read_app_version(APP_ROOT))
+    zip_path = create_zip()
     print(f"已生成独立应用：{APP_BUNDLE}")
-    print(f"已生成分发压缩包：{ZIP_PATH}")
+    print(f"已生成分发压缩包：{zip_path}")
     return 0
 
 
@@ -47,7 +53,7 @@ def ensure_frontend_dist() -> None:
     if not index.exists():
         raise SystemExit(
             "缺少 frontend/dist/index.html。请先执行：\n"
-            "  cd apps/trellis-manager-desktop/frontend && pnpm install && pnpm build"
+            "  cd apps/trellis-manager-desktop/frontend && npm install && npx vite build"
         )
 
 
@@ -110,15 +116,32 @@ def build_app(python: Path) -> None:
         shutil.rmtree(collected_dir)
 
 
-def create_zip() -> None:
+def write_bundle_version(version: str) -> None:
+    plist_path = APP_BUNDLE / "Contents" / "Info.plist"
+    if not plist_path.exists():
+        raise SystemExit(f"未找到 Info.plist：{plist_path}")
+    with plist_path.open("rb") as file:
+        payload = plistlib.load(file)
+    payload["CFBundleShortVersionString"] = version
+    with plist_path.open("wb") as file:
+        plistlib.dump(payload, file)
+
+
+def versioned_zip_path(version: str) -> Path:
+    return DIST_ROOT / f"{APP_NAME}-{version}-macos-arm64.zip"
+
+
+def create_zip() -> Path:
     if not APP_BUNDLE.exists():
         raise SystemExit(f"未找到打包产物：{APP_BUNDLE}")
-    if ZIP_PATH.exists():
-        ZIP_PATH.unlink()
+    zip_path = versioned_zip_path(read_app_version(APP_ROOT))
+    if zip_path.exists():
+        zip_path.unlink()
     subprocess.run(
-        ["ditto", "-c", "-k", "--keepParent", str(APP_BUNDLE), str(ZIP_PATH)],
+        ["ditto", "-c", "-k", "--keepParent", str(APP_BUNDLE), str(zip_path)],
         check=True,
     )
+    return zip_path
 
 
 if __name__ == "__main__":

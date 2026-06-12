@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "name": "trellis-manager-desktop",
+  "version": "0.1.0",
+  "scripts": {
+    "release:version": "python3 scripts/release.py version",
+    "release:package": "python3 scripts/release.py package",
+    "release:publish": "python3 scripts/release.py publish"
+  }
+}
