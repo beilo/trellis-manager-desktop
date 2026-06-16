@@ -56,7 +56,10 @@ Filled backend Trellis spec from current app/tests patterns, updated bootstrap c
 
 ### Main Changes
 
-(Add details)
+- Replaced the one-shot-sim-only copy helper with `sync_bundled_public_skills`, which scans bundled skills and force-overwrites target entries.
+- Made `~/.agents/skills/<skill>` the local source of truth and creates relative symlinks from `~/.codex/skills/<skill>` and `~/.claude/skills/<skill>`.
+- Kept the bundled app resource scoped to `resources/skills/one-shot-sim` only.
+- Updated backend code-spec and regression tests for the new distribution contract.
 
 ### Git Commits
 
@@ -167,6 +170,42 @@ Added project-local Paseo workflow config, executor, agent skill, tests, changel
 ### Testing
 
 - [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 6: 公共技能全局分发
+
+**Date**: 2026-06-16
+**Task**: 公共技能全局分发
+**Branch**: `main`
+
+### Summary
+
+将工具链安装后的技能同步改为桌面端内置公共技能分发：当前仅打包 one-shot-sim，安装后复制到 ~/.agents/skills，并为 ~/.codex/skills 与 ~/.claude/skills 创建相对 symlink；同步后端规范和测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `53eb01d` | feat: distribute bundled one-shot-sim skill --leip |
+
+### Testing
+
+- [OK] `python3 -m unittest discover -s tests -p 'test_ops.py'`
+- [OK] `python3 -m unittest discover -s tests`
+- [OK] `python3 -m py_compile app/ops.py app/api.py scripts/build_app.py scripts/build_standalone_app.py`
+- [OK] `git diff --check`
 
 ### Status
 

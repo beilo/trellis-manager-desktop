@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
-- **Last Active**: 2026-06-12
+- **Total Sessions**: 6
+- **Last Active**: 2026-06-16
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~177 | Active |
+| `journal-1.md` | ~210 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-06-16 | 公共技能全局分发 | `53eb01d` | `main` |
 | 5 | 2026-06-12 | 发包自动化 | `d506669` | `main` |
 | 4 | 2026-06-12 | 内置 one-shot-sim 技能同步 | `25a83be` | `main` |
 | 3 | 2026-06-07 | Paseo reusable workflow configuration | `db0fabe` | `main` |

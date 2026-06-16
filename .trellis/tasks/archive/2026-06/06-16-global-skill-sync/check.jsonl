@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "verify implementation and tests match the new public skill distribution contract"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "verify failure paths remain OperationError-based and testable with temporary home directories"}
