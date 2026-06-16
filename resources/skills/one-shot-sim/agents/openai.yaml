@@ -1,4 +1,4 @@
 interface:
-  display_name: "一轮完成"
-  short_description: "无 channel、无子代理的 Trellis 一轮完成流程"
-  default_prompt: "使用 one-shot-sim（一轮完成）执行当前 Trellis 简化流程"
+  display_name: "one-shot-sim"
+  short_description: "无 channel、无子代理地执行 Trellis 一轮完成"
+  default_prompt: "使用 $one-shot-sim 从需求讨论到收尾提交执行当前 Trellis 简化流程。"

@@ -132,42 +132,49 @@ runner.run(["paseo", "run", "--json", "--provider", provider, "--cwd", cwd, prom
 
 ### 1. Scope / Trigger
 
-- Trigger: 工具仓库安装、更新或 zip 重装成功后，需要把桌面端内置技能覆盖到本机 AI 工具全局技能目录。
+- Trigger: 工具仓库安装、更新或 zip 重装成功后，需要把桌面端内置公共技能覆盖到本机 AI 工具全局技能目录。
 - 适用范围：`app/ops.py` 中安装/构建成功后的本地文件同步，以及 `scripts/build_app.py` / `scripts/build_standalone_app.py` 的资源打包。
 
 ### 2. Signatures
 
-- `sync_bundled_one_shot_sim_skill(source_dir: Path = BUNDLED_ONE_SHOT_SIM_SKILL, home_dir: Path | None = None) -> dict[str, str]`
+- `sync_bundled_public_skills(source_dir: Path = BUNDLED_SKILLS_DIR, home_dir: Path | None = None) -> dict[str, str]`
 - 调用方：`install_or_update_tool_repo(...)`、`install_from_zip(...)`、`install_from_remote_zip(...)`
-- 内置资源路径：`resources/skills/one-shot-sim/`
-- 全局目标路径：`~/.codex/skills/one-shot-sim`、`~/.claude/skills/one-shot-sim`
+- 内置资源路径：`resources/skills/<skill>/`
+- 本机权威源：`~/.agents/skills/<skill>`
+- 工具入口：`~/.codex/skills/<skill>`、`~/.claude/skills/<skill>`
 
 ### 3. Contracts
 
-- `source_dir` 必须是目录，且包含 `SKILL.md`。
+- `source_dir` 必须是目录，且至少包含一个带 `SKILL.md` 的一级子目录。
+- 只有包含 `SKILL.md` 的一级子目录视为可分发技能；无效子目录忽略。
 - `home_dir` 仅用于测试注入；产品路径默认 `Path.home()`。
-- 同步语义是覆盖：目标可以是旧目录、文件或历史 symlink；先移除目标入口，再从内置资源 `copytree`。
-- `OperationReport.details` 必须包含 `synced_skill`、`skill_source`、`codex_skill`、`claude_skill`，方便操作日志取证。
+- 同步语义是强制覆盖：目标可以是旧目录、文件或历史 symlink；先移除目标入口，再写入新入口。
+- 每个技能先复制到 `~/.agents/skills/<skill>`，这是本机唯一权威副本。
+- `~/.codex/skills/<skill>` 和 `~/.claude/skills/<skill>` 必须创建为目录 symlink，目标为 `../../.agents/skills/<skill>`。
+- `OperationReport.details` 必须包含 `synced_skills`、`synced_skill_count`、`skill_source`、`agents_skill_dir`、`codex_skill_dir`、`claude_skill_dir`，方便操作日志取证。
 - 打包脚本必须把 `resources/` 放进应用根目录，保持运行时 `app/ops.py` 可通过 repo/app 根定位资源。
 
 ### 4. Validation & Error Matrix
 
-- 内置技能目录不存在 -> `OperationError("内置 one-shot-sim 技能不存在或不完整：...")`
-- 内置技能缺少 `SKILL.md` -> 同上
+- 内置公共技能根目录不存在 -> `OperationError("内置公共技能目录不存在或不完整：...")`
+- 内置公共技能根目录没有任何有效 `SKILL.md` -> 同上
 - 目标是 symlink -> `unlink()` symlink 本身，禁止跟随并覆盖 shared source
 - 目标是普通目录 -> `shutil.rmtree()` 后复制
+- 目标是普通文件 -> `unlink()` 后写入新目录或 symlink
 - 目标父目录不存在 -> 自动创建父目录
 
 ### 5. Good/Base/Bad Cases
 
-- Good: 构建成功后，Codex 和 Claude Code 全局目录都得到桌面端内置 `one-shot-sim` 的普通目录副本。
-- Base: 目标目录已存在旧版本，安装后 `SKILL.md` 被新内置副本替换。
+- Good: 构建成功后，`.agents` 得到桌面端内置公共技能副本，Codex 和 Claude Code 全局目录得到指向 `.agents` 的 symlink。
+- Base: 同名目标已存在旧目录、旧文件或旧 symlink，安装后被强制替换为新语义。
 - Bad: 测试不注入 `home_dir`，导致单测写入真实 `~/.codex` 或 `~/.claude`。
 
 ### 6. Tests Required
 
-- 单测覆盖 `sync_bundled_one_shot_sim_skill()` 覆盖旧目录和旧 symlink。
-- 安装/zip 构建测试必须传 `global_skill_home_dir=tmp/home`，并断言两个目标 `SKILL.md` 已创建。
+- 单测覆盖 `sync_bundled_public_skills()` 扫描多个技能、忽略无效目录、覆盖旧目录/文件/symlink。
+- 单测必须断言 `~/.agents/skills/<skill>/SKILL.md` 是普通目录副本。
+- 单测必须断言 `~/.codex/skills/<skill>` 和 `~/.claude/skills/<skill>` 是 symlink，目标是 `../../.agents/skills/<skill>`。
+- 安装/zip 构建测试必须传 `global_skill_home_dir=tmp/home` 和临时 `bundled_skill_source_dir`，避免依赖真实用户目录或当前仓库资源状态。
 - 远端 zip 的 `replace=False` + 目标存在要前置阻断，避免先联网下载再失败。
 - 打包脚本变更后至少运行 `python3 -m py_compile ... scripts/*.py`。
 
@@ -188,6 +195,7 @@ install_from_zip(
     repo_dir,
     runner=runner,
     global_skill_home_dir=temp_home,
+    bundled_skill_source_dir=temp_bundled_skills,
 )
 ```
 

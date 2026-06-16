@@ -48,7 +48,7 @@ from app.ops import (  # noqa: E402
     project_update_command,
     project_update_preview_command,
     push_task_to_helm,
-    sync_bundled_one_shot_sim_skill,
+    sync_bundled_public_skills,
     update_project,
 )
 from app.runner import CommandResult, CommandRunner  # noqa: E402
@@ -134,6 +134,13 @@ class ToolRepoInstallRunner:
         normalized = [str(part) for part in command]
         self.calls.append((normalized, cwd))
         return CommandResult(normalized, cwd, 0, "", "", 1)
+
+
+def write_bundled_skill(source_root: Path, name: str, skill_text: str = "skill\n") -> Path:
+    skill_dir = source_root / name
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(skill_text, encoding="utf-8")
+    return skill_dir
 
 
 class HelmRunner:
@@ -735,7 +742,10 @@ class TrellisManagerOpsTest(unittest.TestCase):
     def test_tool_repo_install_uses_configured_sources(self) -> None:
         """安装工具仓库时应透传设置页里的仓库源与分发分支。"""
         with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp) / "Trellis"
+            root = Path(tmp)
+            repo = root / "Trellis"
+            bundled_skills = root / "bundled-skills"
+            write_bundled_skill(bundled_skills, "trellis-start")
             runner = ToolRepoInstallRunner()
 
             report = install_or_update_tool_repo(
@@ -744,11 +754,13 @@ class TrellisManagerOpsTest(unittest.TestCase):
                 official_repo_url="https://example.com/official.git",
                 accelerated_repo_url="https://example.com/mirror.git",
                 distribution_branch="release/custom",
-                global_skill_home_dir=Path(tmp) / "home",
+                global_skill_home_dir=root / "home",
+                bundled_skill_source_dir=bundled_skills,
             )
 
             self.assertTrue(report.ok)
             self.assertEqual(report.details["branch"], "release/custom")
+            self.assertEqual(report.details["synced_skills"], "trellis-start")
             self.assertIn(
                 ["git", "clone", "--branch", "release/custom", "https://example.com/mirror.git", str(repo)],
                 [call[0] for call in runner.calls],
@@ -1040,12 +1052,15 @@ class TrellisManagerOpsTest(unittest.TestCase):
                 for path in source.rglob("*"):
                     archive.write(path, path.relative_to(root))
 
+            bundled_skills = root / "bundled-skills"
+            write_bundled_skill(bundled_skills, "trellis-start")
             runner = FakeRunner()
             report = install_from_zip(
                 zip_path,
                 root / "Trellis",
                 runner=runner,  # type: ignore[arg-type]
                 global_skill_home_dir=root / "home",
+                bundled_skill_source_dir=bundled_skills,
             )
 
             self.assertTrue(report.ok)
@@ -1056,36 +1071,69 @@ class TrellisManagerOpsTest(unittest.TestCase):
                     ["pnpm", "build"],
                 ],
             )
-            self.assertEqual(report.details["synced_skill"], "one-shot-sim")
-            self.assertTrue((root / "home" / ".codex" / "skills" / "one-shot-sim" / "SKILL.md").exists())
-            self.assertTrue((root / "home" / ".claude" / "skills" / "one-shot-sim" / "SKILL.md").exists())
+            self.assertEqual(report.details["synced_skills"], "trellis-start")
+            self.assertEqual(report.details["synced_skill_count"], "1")
+            agents_target = root / "home" / ".agents" / "skills" / "trellis-start"
+            codex_target = root / "home" / ".codex" / "skills" / "trellis-start"
+            claude_target = root / "home" / ".claude" / "skills" / "trellis-start"
+            self.assertTrue((agents_target / "SKILL.md").exists())
+            self.assertTrue(codex_target.is_symlink())
+            self.assertTrue(claude_target.is_symlink())
+            self.assertEqual(codex_target.readlink(), Path("..") / ".." / ".agents" / "skills" / "trellis-start")
+            self.assertEqual(claude_target.readlink(), Path("..") / ".." / ".agents" / "skills" / "trellis-start")
 
-    def test_sync_bundled_one_shot_sim_skill_replaces_existing_targets(self) -> None:
-        """内置技能同步应覆盖旧目录和历史 symlink。"""
+    def test_sync_bundled_public_skills_replaces_targets_with_shared_symlinks(self) -> None:
+        """内置公共技能同步应强制覆盖旧入口，并让 Codex/Claude 指向 .agents 权威源。"""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source = root / "bundled" / "one-shot-sim"
-            source.mkdir(parents=True)
-            (source / "SKILL.md").write_text("new skill\n", encoding="utf-8")
-            (source / "agents").mkdir()
-            (source / "agents" / "openai.yaml").write_text("agent\n", encoding="utf-8")
+            source = root / "bundled"
+            alpha_source = write_bundled_skill(source, "alpha", "alpha skill\n")
+            (alpha_source / "agents").mkdir()
+            (alpha_source / "agents" / "openai.yaml").write_text("agent\n", encoding="utf-8")
+            write_bundled_skill(source, "beta", "beta skill\n")
+            (source / "invalid").mkdir()
 
             home = root / "home"
-            codex_target = home / ".codex" / "skills" / "one-shot-sim"
-            claude_target = home / ".claude" / "skills" / "one-shot-sim"
-            codex_target.mkdir(parents=True)
-            (codex_target / "SKILL.md").write_text("old skill\n", encoding="utf-8")
+            agents_alpha = home / ".agents" / "skills" / "alpha"
+            agents_alpha.mkdir(parents=True)
+            (agents_alpha / "SKILL.md").write_text("old skill\n", encoding="utf-8")
+            agents_beta = home / ".agents" / "skills" / "beta"
+            agents_beta.parent.mkdir(parents=True, exist_ok=True)
+            agents_beta.write_text("old file\n", encoding="utf-8")
+            codex_target = home / ".codex" / "skills" / "alpha"
+            codex_target.parent.mkdir(parents=True)
+            codex_target.write_text("old file\n", encoding="utf-8")
+            claude_target = home / ".claude" / "skills" / "alpha"
             shared = root / "shared"
             shared.mkdir()
             claude_target.parent.mkdir(parents=True)
             claude_target.symlink_to(shared, target_is_directory=True)
 
-            details = sync_bundled_one_shot_sim_skill(source, home)
+            details = sync_bundled_public_skills(source, home)
 
-            self.assertEqual(details["synced_skill"], "one-shot-sim")
-            self.assertFalse(claude_target.is_symlink())
-            self.assertEqual((codex_target / "SKILL.md").read_text(encoding="utf-8"), "new skill\n")
-            self.assertEqual((claude_target / "agents" / "openai.yaml").read_text(encoding="utf-8"), "agent\n")
+            self.assertEqual(details["synced_skills"], "alpha,beta")
+            self.assertEqual(details["synced_skill_count"], "2")
+            self.assertEqual((agents_alpha / "SKILL.md").read_text(encoding="utf-8"), "alpha skill\n")
+            self.assertEqual((agents_alpha / "agents" / "openai.yaml").read_text(encoding="utf-8"), "agent\n")
+            self.assertEqual((agents_beta / "SKILL.md").read_text(encoding="utf-8"), "beta skill\n")
+            self.assertTrue(shared.exists())
+            for tool_name in [".codex", ".claude"]:
+                target = home / tool_name / "skills" / "alpha"
+                self.assertTrue(target.is_symlink())
+                self.assertEqual(target.readlink(), Path("..") / ".." / ".agents" / "skills" / "alpha")
+                self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "alpha skill\n")
+
+    def test_sync_bundled_public_skills_rejects_empty_source(self) -> None:
+        """内置公共技能为空时应阻断安装，避免静默漏装技能。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "bundled"
+            source.mkdir()
+
+            with self.assertRaises(OperationError) as error:
+                sync_bundled_public_skills(source, root / "home")
+
+            self.assertIn("内置公共技能目录不存在或不完整", str(error.exception))
 
     # ── install_from_remote_zip 测试 ──
 
