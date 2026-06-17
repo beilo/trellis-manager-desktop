@@ -10,7 +10,7 @@ const DEFAULT_SETTINGS: ManagerSettings = {
   // 前端重置默认值要与后端 config.py 保持一致，避免加载失败时写回旧仓库源。
   official_repo_url: 'https://github.com/beilo/Trellis.git',
   accelerated_repo_url: 'https://xget.xi-xu.me/gh/beilo/Trellis.git',
-  distribution_branch: 'sync/v0.6.0-rc',
+  distribution_branch: 'beilo/main',
   developer_name: '',
   init_platforms: [],
 }

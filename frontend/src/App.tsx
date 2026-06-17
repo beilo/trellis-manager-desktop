@@ -595,14 +595,14 @@ export default function App() {
     setUpdatePreviewOpen(false)
   }, [updatePreviewBusy])
 
-  const handleConfirmUpdatePreview = useCallback(async (confirmedAllowDirty: boolean) => {
+  const handleConfirmUpdatePreview = useCallback(async (confirmedAllowDirty: boolean, confirmedMigrate: boolean) => {
     if (!selectedProject) return
 
     setUpdatePreviewBusy(true)
     setProjectBusy(true)
-    addLog('task', '== 更新业务项目 ==')
+    addLog('task', confirmedMigrate ? '== 迁移更新业务项目 ==' : '== 更新业务项目 ==')
     try {
-      const report = await api.updateProject(selectedProject, confirmedAllowDirty)
+      const report = await api.updateProject(selectedProject, confirmedAllowDirty, confirmedMigrate)
       addLogs(...reportToLogs(report))
       if (report.ok) {
         const diff = report.details?.diff_stat ?? report.details?.status ?? '无 git 变更摘要'

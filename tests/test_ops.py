@@ -32,6 +32,7 @@ from app.ops import (  # noqa: E402
     check_developer_config,
     check_helm_status,
     check_tool_repo,
+    check_wrapper_commands,
     ensure_wrappers_and_path,
     ensure_zshrc_path,
     get_project_git_summary,
@@ -78,6 +79,8 @@ class FakeRunner:
             return self._result(normalized, cwd, "1\t2\n")
         if normalized[-3:] == ["update", "--force", "--dry-run"]:
             return self._result(normalized, cwd, "Analyzing migrations...\n[Dry run] No changes made.\n")
+        if normalized[-3:] == ["update", "--force", "--migrate"]:
+            return self._result(normalized, cwd, "migrated\n")
         if normalized[-2:] == ["update", "--force"]:
             return self._result(normalized, cwd, "updated\n")
         if normalized[:3] == ["git", "diff", "--stat"]:
@@ -116,6 +119,8 @@ class BatchUpdateRunner:
             return self._result(normalized, cwd, " M app.py\n" if behavior.get("dirty") else "")
         if normalized[:3] == ["git", "diff", "--stat"]:
             return self._result(normalized, cwd, "")
+        if normalized[-3:] == ["update", "--force", "--migrate"]:
+            return self._result(normalized, cwd, "migrated\n")
         if normalized[-2:] == ["update", "--force"]:
             if behavior.get("update_fail"):
                 return CommandResult(normalized, cwd, 1, "", "update failed", 1)
@@ -200,8 +205,27 @@ class TrellisManagerOpsTest(unittest.TestCase):
 
             self.assertEqual(project_init_command(["claude-code", "cursor"], "alice", bin_dir), [str(bin_dir / "tl"), "init", "-y", "--claude", "--cursor", "-u", "alice"])
             self.assertEqual(project_update_command(bin_dir), [str(bin_dir / "tl"), "update", "--force"])
+            self.assertEqual(project_update_command(bin_dir, migrate=True), [str(bin_dir / "tl"), "update", "--force", "--migrate"])
             self.assertEqual(project_update_preview_command(bin_dir), [str(bin_dir / "tl"), "update", "--force", "--dry-run"])
             self.assertEqual(accelerated_clone_url(), "https://xget.xi-xu.me/gh/beilo/Trellis.git")
+
+    def test_check_wrapper_commands_verifies_mem_help(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp) / "bin"
+            bin_dir.mkdir()
+            for name in ("tl", "trellis"):
+                path = bin_dir / name
+                path.write_text("#!/bin/sh\n", encoding="utf-8")
+                path.chmod(path.stat().st_mode | stat.S_IXUSR)
+            runner = FakeRunner()
+
+            statuses = check_wrapper_commands(bin_dir, runner)  # type: ignore[arg-type]
+
+            self.assertTrue(all(status.status == "ok" for status in statuses))
+            self.assertTrue(all(status.mem_help_ok for status in statuses))
+            calls = [call[0] for call in runner.calls]
+            self.assertIn([str(bin_dir / "tl"), "mem", "help"], calls)
+            self.assertIn([str(bin_dir / "trellis"), "mem", "help"], calls)
 
     def test_project_git_summary_returns_dirty_files_and_commits(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -272,10 +296,68 @@ class TrellisManagerOpsTest(unittest.TestCase):
             self.assertEqual(preview.trellis_version_before, "0.6.0-beta.9")
             self.assertEqual(preview.latest_version, "0.6.0-beta.10")
             self.assertTrue(preview.would_run_migrations)
+            self.assertFalse(preview.requires_migrate)
             self.assertIn("[Dry run] No changes made.", preview.dry_run_output)
             calls = [call[0] for call in runner.calls]
             self.assertIn([str(bin_dir / "tl"), "update", "--force", "--dry-run"], calls)
             self.assertNotIn([str(bin_dir / "tl"), "update", "--force"], calls)
+
+    def test_preview_project_update_requires_migrate_for_0_5_to_0_6(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "project"
+            tool_repo = root / "tool"
+            bin_dir = root / "bin"
+            project.mkdir()
+            (project / ".trellis").mkdir()
+            (project / ".trellis" / ".version").write_text("0.5.19", encoding="utf-8")
+            package = tool_repo / "packages" / "cli" / "package.json"
+            package.parent.mkdir(parents=True)
+            package.write_text(json.dumps({"version": "0.6.0"}), encoding="utf-8")
+            runner = FakeRunner()
+
+            preview = preview_project_update(project, runner, bin_dir, tool_repo)  # type: ignore[arg-type]
+
+            self.assertTrue(preview.requires_migrate)
+            self.assertTrue(preview.would_run_migrations)
+
+    def test_update_project_runs_migrate_only_for_0_5_to_0_6(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "project"
+            tool_repo = root / "tool"
+            bin_dir = root / "bin"
+            project.mkdir()
+            (project / ".trellis").mkdir()
+            (project / ".trellis" / ".version").write_text("0.5.19", encoding="utf-8")
+            package = tool_repo / "packages" / "cli" / "package.json"
+            package.parent.mkdir(parents=True)
+            package.write_text(json.dumps({"version": "0.6.0"}), encoding="utf-8")
+            runner = FakeRunner()
+
+            report = update_project(project, allow_dirty=True, migrate=True, runner=runner, bin_dir=bin_dir, tool_repo_dir=tool_repo)  # type: ignore[arg-type]
+
+            self.assertTrue(report.ok)
+            self.assertEqual(report.details["migrate"], "true")
+            self.assertIn([str(bin_dir / "tl"), "update", "--force", "--migrate"], [call[0] for call in runner.calls])
+
+    def test_update_project_rejects_unneeded_migrate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "project"
+            tool_repo = root / "tool"
+            bin_dir = root / "bin"
+            project.mkdir()
+            (project / ".trellis").mkdir()
+            (project / ".trellis" / ".version").write_text("0.6.0-rc.0", encoding="utf-8")
+            package = tool_repo / "packages" / "cli" / "package.json"
+            package.parent.mkdir(parents=True)
+            package.write_text(json.dumps({"version": "0.6.0"}), encoding="utf-8")
+
+            with self.assertRaises(OperationError) as error:
+                update_project(project, allow_dirty=True, migrate=True, runner=FakeRunner(), bin_dir=bin_dir, tool_repo_dir=tool_repo)  # type: ignore[arg-type]
+
+            self.assertIn("不需要 --migrate", str(error.exception))
 
     def test_preview_project_update_failure_preserves_output(self) -> None:
         class FailingPreviewRunner(FakeRunner):
@@ -770,6 +852,7 @@ class TrellisManagerOpsTest(unittest.TestCase):
                 [call[0] for call in runner.calls],
             )
             self.assertIn(["pnpm", "install"], [call[0] for call in runner.calls])
+            self.assertIn(["pnpm", "build"], [call[0] for call in runner.calls])
 
     def test_settings_roundtrip_persists_repo_sources_and_branch(self) -> None:
         """设置读写应保留新字段，并允许局部更新不丢失现有值。"""
@@ -997,22 +1080,22 @@ class TrellisManagerOpsTest(unittest.TestCase):
         """HTTPS GitHub URL 推导 codeload zip 地址。"""
         url = github_branch_zip_url(
             "https://github.com/beilo/Trellis.git",
-            "sync/v0.6.0-rc",
+            "beilo/main",
         )
         self.assertEqual(
             url,
-            "https://codeload.github.com/beilo/Trellis/zip/refs/heads/sync/v0.6.0-rc",
+            "https://codeload.github.com/beilo/Trellis/zip/refs/heads/beilo/main",
         )
 
     def test_github_branch_zip_url_ssh(self) -> None:
         """SSH GitHub URL 推导 codeload zip 地址。"""
         url = github_branch_zip_url(
             "git@github.com:beilo/Trellis.git",
-            "sync/v0.6.0-rc",
+            "beilo/main",
         )
         self.assertEqual(
             url,
-            "https://codeload.github.com/beilo/Trellis/zip/refs/heads/sync/v0.6.0-rc",
+            "https://codeload.github.com/beilo/Trellis/zip/refs/heads/beilo/main",
         )
 
     def test_github_branch_zip_url_non_github(self) -> None:
@@ -1188,7 +1271,7 @@ class TrellisManagerOpsTest(unittest.TestCase):
                     repo,
                     replace=False,
                     official_repo_url="https://github.com/beilo/Trellis.git",
-                    distribution_branch="sync/v0.6.0-rc",
+                    distribution_branch="beilo/main",
                 )
 
             self.assertIn("已存在", str(error.exception))

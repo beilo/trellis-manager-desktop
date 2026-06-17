@@ -59,12 +59,13 @@ export function CommandCard({ items, loading, onRefresh }: CommandCardProps) {
               <TableHead className="w-16 text-center">可执行</TableHead>
               <TableHead className="w-14 text-center">版本</TableHead>
               <TableHead className="w-14 text-center">帮助</TableHead>
+              <TableHead className="w-16 text-center">mem</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
                   尚未检查
                 </TableCell>
               </TableRow>
@@ -88,6 +89,9 @@ export function CommandCard({ items, loading, onRefresh }: CommandCardProps) {
                   </TableCell>
                   <TableCell className="text-center text-sm">
                     {item.help_ok ? '是' : '否'}
+                  </TableCell>
+                  <TableCell className="text-center text-sm">
+                    {item.mem_help_ok ? '是' : '否'}
                   </TableCell>
                 </TableRow>
               ))

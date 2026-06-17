@@ -128,6 +128,7 @@ export interface UpdatePreview {
   trellis_version_before: string | null
   latest_version: string | null
   would_run_migrations: boolean
+  requires_migrate: boolean
 }
 
 export interface CommandResult {
@@ -148,6 +149,7 @@ export interface ToolCommandStatus {
   executable: boolean
   version_ok: boolean
   help_ok: boolean
+  mem_help_ok: boolean
   status: Status
   message: string
   commands: CommandResult[]

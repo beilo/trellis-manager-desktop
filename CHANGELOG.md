@@ -9,7 +9,8 @@
 ### Changed
 
 - **ProjectCard 按钮统一 variant**：Init / Update 按钮移除条件 `className` 颜色覆盖，统一使用 `variant="default"`，不需要时通过 `disabled` 表达状态，与其他按钮规范一致。
-- **默认分发分支**：工具仓库默认分发分支从 `custom/beilo-v0.5-rc` 调整为 `sync/v0.6.0-rc`，新配置和前端恢复默认会跟随 v0.6 RC 发布线。
+- **默认分发分支**：工具仓库默认分发分支从 `sync/v0.6.0-rc` 调整为 `beilo/main`，新配置和前端恢复默认会跟随 Beilo 自有发布线；工具版本展示仍使用 Trellis CLI 兼容版本。
+- **0.6 迁移更新**：业务项目从 `0.5.x` 升级到 `0.6.x` 时，Update 预览会要求显式确认后执行 `tl update --force --migrate`；其他更新保持普通 `tl update --force`。
 - **Header Tab 选中 hover 态**：选中的看板 / 工具链 / 项目入口 hover 时保持透明背景和主色文字，避免 Button ghost 默认深色 `muted` 背景覆盖滑块选中态。
 - **按钮式当前态 hover**：Tabs 当前项、工具链设置平台多选按钮和表格选中行 hover 时保持当前态颜色，避免基础组件默认 hover 覆盖选中反馈。
 - **前端交互浅色底**：基础 Button / Badge、默认 Tabs 容器，以及项目列表、任务列表、文件树、JSONL 行、批量更新行和看板卡片的交互背景从深色 `muted` 改为浅色 `accent`。

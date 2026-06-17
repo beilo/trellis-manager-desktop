@@ -97,6 +97,7 @@ class UpdatePreview:
     trellis_version_before: str | None = None
     latest_version: str | None = None
     would_run_migrations: bool = False
+    requires_migrate: bool = False
 
 
 @dataclass(frozen=True)
@@ -107,6 +108,7 @@ class ToolCommandStatus:
     executable: bool
     version_ok: bool
     help_ok: bool
+    mem_help_ok: bool
     status: Status
     message: str
     commands: list[CommandResult] = field(default_factory=list)
@@ -213,12 +215,20 @@ def project_init_command(
     return cmd
 
 
-def project_update_command(bin_dir: Path = DEFAULT_BIN_DIR) -> list[str]:
-    return [str(wrapper_path("tl", bin_dir)), "update", "--force"]
+def project_update_command(bin_dir: Path = DEFAULT_BIN_DIR, migrate: bool = False) -> list[str]:
+    cmd = [str(wrapper_path("tl", bin_dir)), "update", "--force"]
+    if migrate:
+        cmd.append("--migrate")
+    return cmd
 
 
 def project_update_preview_command(bin_dir: Path = DEFAULT_BIN_DIR) -> list[str]:
     return [*project_update_command(bin_dir), "--dry-run"]
+
+
+def requires_migrate_update(installed: str | None, latest: str | None) -> bool:
+    """0.5 -> 0.6 是 Trellis 官方要求的显式迁移路径。"""
+    return _major_minor(installed) == (0, 5) and _major_minor(latest) == (0, 6)
 
 
 def _parse_git_status_short(output: str) -> list[str]:
@@ -318,11 +328,12 @@ def preview_project_update(
     dirty_files_before = _parse_git_status_short(dirty_result.stdout)
     trellis_version_before = read_project_trellis_version(path)
     latest_version = read_cli_version(tool_repo_dir.expanduser())
+    requires_migrate = requires_migrate_update(trellis_version_before, latest_version)
     dry_run_result = runner.run(project_update_preview_command(bin_dir), cwd=path, timeout=300)
     dry_run_output = "\n".join(part for part in [dry_run_result.stdout.strip(), dry_run_result.stderr.strip()] if part)
     if not dry_run_output:
         dry_run_output = dry_run_result.stdout or dry_run_result.stderr or ""
-    would_run_migrations = _detect_migration_signals(dry_run_output)
+    would_run_migrations = _detect_migration_signals(dry_run_output) or requires_migrate
     ok = dry_run_result.ok
     if ok:
         message = "已完成 update 预览。"
@@ -337,6 +348,7 @@ def preview_project_update(
         trellis_version_before=trellis_version_before,
         latest_version=latest_version,
         would_run_migrations=would_run_migrations,
+        requires_migrate=requires_migrate,
     )
 
 
@@ -476,6 +488,19 @@ def is_version_outdated(installed: str | None, latest: str | None) -> bool:
     if installed_key is None or latest_key is None:
         return installed != latest
     return installed_key < latest_key
+
+
+def _major_minor(version: str | None) -> tuple[int, int] | None:
+    if not version:
+        return None
+    release = version.partition("-")[0]
+    parts = release.split(".")
+    if len(parts) < 2:
+        return None
+    try:
+        return int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
 
 
 def _semver_key(version: str) -> tuple[tuple[int, int, int], tuple[object, ...]] | None:
@@ -873,7 +898,7 @@ def install_or_update_tool_repo(
         _raise_if_failed(pull, "更新工具仓库失败。", commands)
     for command, message, timeout in [
         (["pnpm", "install"], "安装依赖失败。", 600),
-        (["pnpm", "--filter", "@mindfoldhq/trellis", "build"], "构建 Trellis CLI 失败。", 600),
+        (["pnpm", "build"], "构建 Trellis 失败。", 600),
     ]:
         result = runner.run(command, cwd=repo_dir, timeout=timeout)
         commands.append(result)
@@ -952,13 +977,16 @@ def check_wrapper_commands(
         commands: list[CommandResult] = []
         version_ok = False
         help_ok = False
+        mem_help_ok = False
         if executable:
             version = runner.run([path, "--version"], timeout=20)
             help_result = runner.run([path, "--help"], timeout=20)
-            commands.extend([version, help_result])
+            mem_help_result = runner.run([path, "mem", "help"], timeout=20)
+            commands.extend([version, help_result, mem_help_result])
             version_ok = version.ok
             help_ok = help_result.ok
-        ok = exists and executable and version_ok and help_ok
+            mem_help_ok = mem_help_result.ok
+        ok = exists and executable and version_ok and help_ok and mem_help_ok
         statuses.append(
             ToolCommandStatus(
                 name=name,
@@ -967,6 +995,7 @@ def check_wrapper_commands(
                 executable=executable,
                 version_ok=version_ok,
                 help_ok=help_ok,
+                mem_help_ok=mem_help_ok,
                 status="ok" if ok else "error",
                 message="命令可用。" if ok else "命令不可用，请先创建 wrapper 或检查构建结果。",
                 commands=commands,
@@ -1097,8 +1126,10 @@ def init_project(
 def update_project(
     project_dir: Path,
     allow_dirty: bool = False,
+    migrate: bool = False,
     runner: CommandRunner | None = None,
     bin_dir: Path = DEFAULT_BIN_DIR,
+    tool_repo_dir: Path = DEFAULT_REPO_DIR,
 ) -> OperationReport:
     runner = runner or CommandRunner()
     status = inspect_project(str(project_dir), runner)
@@ -1111,7 +1142,9 @@ def update_project(
     commands.append(dirty_result)
     if dirty and not allow_dirty:
         raise OperationError("项目工作区有未提交变更，请确认后再继续 update。", commands)
-    update_result = runner.run(project_update_command(bin_dir), cwd=status.path, timeout=300)
+    if migrate and not requires_migrate_update(read_project_trellis_version(status.path), read_cli_version(tool_repo_dir.expanduser())):
+        raise OperationError("当前项目版本不需要 --migrate，请使用普通 update。", commands)
+    update_result = runner.run(project_update_command(bin_dir, migrate=migrate), cwd=status.path, timeout=300)
     commands.append(update_result)
     _raise_if_failed(update_result, "项目 update 失败。", commands)
     status_result = runner.run(["git", "status", "--short"], cwd=status.path, timeout=20)
@@ -1125,6 +1158,7 @@ def update_project(
         details={
             "project": str(status.path),
             "dirty_before": dirty_output,
+            "migrate": "true" if migrate else "false",
             "status": status_result.stdout.strip(),
             "diff_stat": diff_result.stdout.strip(),
         },
@@ -1174,7 +1208,7 @@ def batch_update_projects(
                 message = "项目工作区有未提交变更，批量更新已跳过。"
                 results.append(ProjectUpdateResult(str(status.path), False, message, skipped=True, reason=message))
                 continue
-            report = update_project(status.path, allow_dirty=allow_dirty, runner=runner, bin_dir=bin_dir)
+            report = update_project(status.path, allow_dirty=allow_dirty, runner=runner, bin_dir=bin_dir, tool_repo_dir=tool_repo_dir)
             results.append(ProjectUpdateResult(str(status.path), True, report.message, report=report.to_log_entry()))
         except OperationError as error:
             results.append(

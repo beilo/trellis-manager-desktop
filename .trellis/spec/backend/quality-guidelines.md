@@ -201,6 +201,81 @@ install_from_zip(
 
 同步逻辑必须从桌面端内置资源复制，不依赖 `/Users/am/ai-workspace/shared-skills/...` 这类开发机路径。
 
+## Scenario: Trellis 工具分发线和项目迁移更新
+
+### 1. Scope / Trigger
+
+- Trigger: 修改工具仓库默认分发分支、工具仓库构建命令、wrapper 命令可用性检查、或项目 `update` 命令参数。
+- 适用范围：`app/config.py` 默认值、`app/ops.py` 的安装/检查/update 逻辑、`app/api.py` 桥接参数、前端 `UpdatePreview` / `ToolCommandStatus` 消费方。
+- 分发线身份和 Trellis CLI 兼容版本是两个概念：Manager 项目过期判断使用 CLI package version，不使用 Beilo release tag。
+
+### 2. Signatures
+
+- 默认分发分支：`DISTRIBUTION_BRANCH = "beilo/main"`
+- Git 工具仓库构建：`pnpm install` 后执行根 `pnpm build`
+- 预览：`preview_project_update(project_dir, runner=None, bin_dir=DEFAULT_BIN_DIR, tool_repo_dir=DEFAULT_REPO_DIR) -> UpdatePreview`
+- 更新：`update_project(project_dir, allow_dirty=False, migrate=False, runner=None, bin_dir=DEFAULT_BIN_DIR, tool_repo_dir=DEFAULT_REPO_DIR) -> OperationReport`
+- API：`TrellisAPI.update_project(path: str, allow_dirty: bool = False, migrate: bool = False) -> dict`
+- 命令检查：`check_wrapper_commands(...) -> list[ToolCommandStatus]`
+
+### 3. Contracts
+
+- `UpdatePreview.requires_migrate` 只表示 Manager 明确识别到 `.trellis/.version` 是 `0.5.x` 且工具仓库 CLI version 是 `0.6.x`。
+- `UpdatePreview.would_run_migrations` 可以来自 dry-run migration 信号，也可以来自 `requires_migrate`。
+- `update_project(..., migrate=True)` 只能在 `requires_migrate_update(installed, latest)` 为真时执行，否则抛 `OperationError`，不运行 `tl update`。
+- 非迁移 update 继续执行 `tl update --force`；迁移 update 执行 `tl update --force --migrate`。
+- `OperationReport.details["migrate"]` 必须记录 `"true"` 或 `"false"`，方便操作日志取证。
+- `ToolCommandStatus.mem_help_ok` 必须反映 `<wrapper> mem help` 是否成功；`status="ok"` 需要 `--version`、`--help` 和 `mem help` 全部成功。
+- 前端新增响应字段时，必须同步更新 `frontend/src/types.ts` 和所有对应组件/调用点，不能靠 `any` 隐式透传。
+
+### 4. Validation & Error Matrix
+
+- `.trellis/.version = 0.5.x` 且 CLI version `0.6.x` -> preview 标记 `requires_migrate=True`，真实执行前要求用户显式确认。
+- `.trellis/.version = 0.6.0-beta.*` / `0.6.0-rc.0` / `0.6.x` 且 CLI version `0.6.x` -> 不强制 `--migrate`。
+- 用户传 `migrate=True` 但版本不匹配 -> `OperationError("当前项目版本不需要 --migrate，请使用普通 update。")`，不执行 update 命令。
+- wrapper `mem help` 失败 -> `ToolCommandStatus.status="error"`，提示用户检查 wrapper 或构建结果。
+- Git 工具仓库构建仍使用 filtered CLI build -> 视为回归，因为 `@mindfoldhq/trellis-core` 可能未按根 workspace 顺序构建。
+
+### 5. Good/Base/Bad Cases
+
+- Good: `0.5.19 -> 0.6.0` 预览显示迁移确认，用户勾选后执行 `tl update --force --migrate`。
+- Base: `0.6.0-rc.0 -> 0.6.0` 执行普通 `tl update --force`，不出现 migrate 强确认。
+- Bad: 所有 update 都默认加 `--migrate`，导致普通模板刷新和版本迁移语义混在一起。
+- Bad: wrapper 只检查 `--help`，没有检查 `mem help`，导致 0.6 MEM 子命令损坏时仍显示命令可用。
+
+### 6. Tests Required
+
+- 单测断言 `project_update_command(bin_dir, migrate=True)` 的命令数组包含 `--migrate`。
+- 单测覆盖 `preview_project_update()` 对 `0.5.x -> 0.6.x` 设置 `requires_migrate=True`。
+- 单测覆盖 `update_project(..., migrate=True)` 只在 `0.5.x -> 0.6.x` 运行 migrate 命令。
+- 单测覆盖不需要迁移时传 `migrate=True` 会抛 `OperationError`。
+- 单测覆盖 Git 安装/更新使用根 `["pnpm", "build"]`。
+- 单测覆盖 `check_wrapper_commands()` 调用 `tl mem help` 和 `trellis mem help`，并序列化 `mem_help_ok`。
+- 前端构建必须通过，证明 TS 类型、API 参数和弹窗/表格消费方一致。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+# 普通 update 无条件加 migrate，破坏用户对迁移操作的显式确认。
+runner.run([str(wrapper_path("tl", bin_dir)), "update", "--force", "--migrate"], cwd=project)
+```
+
+#### Correct
+
+```python
+requires_migrate = requires_migrate_update(
+    read_project_trellis_version(project),
+    read_cli_version(tool_repo_dir),
+)
+if migrate and not requires_migrate:
+    raise OperationError("当前项目版本不需要 --migrate，请使用普通 update。")
+runner.run(project_update_command(bin_dir, migrate=migrate), cwd=project)
+```
+
+迁移判断归后端命令层所有；前端只展示预览结果并收集用户确认，不重新实现版本比较。
+
 ## Scenario: 应用发包命令
 
 ### 1. Scope / Trigger

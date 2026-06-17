@@ -336,11 +336,13 @@ class TrellisAPI:
         )
         return report.to_log_entry()
 
-    def update_project(self, path: str, allow_dirty: bool = False) -> dict[str, Any]:
+    def update_project(self, path: str, allow_dirty: bool = False, migrate: bool = False) -> dict[str, Any]:
         report = update_project(
             Path(path).expanduser(),
             allow_dirty=allow_dirty,
+            migrate=migrate,
             runner=self._runner,
+            tool_repo_dir=self._config.trellis_repo,
         )
         return report.to_log_entry()
 

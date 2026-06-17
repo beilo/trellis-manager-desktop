@@ -11,7 +11,7 @@ interface UpdatePreviewDialogProps {
   allowDirty: boolean
   confirming: boolean
   onCancel: () => void
-  onConfirm: (allowDirty: boolean) => void
+  onConfirm: (allowDirty: boolean, migrate: boolean) => void
 }
 
 function formatVersion(value: string | null): string {
@@ -27,9 +27,11 @@ export function UpdatePreviewDialog({
   onConfirm,
 }: UpdatePreviewDialogProps) {
   const [dirtyAccepted, setDirtyAccepted] = useState(false)
+  const [migrateAccepted, setMigrateAccepted] = useState(false)
   const dirtyFiles = preview.dirty_files_before ?? []
   const requiresDirtyConfirmation = dirtyFiles.length > 0 && !allowDirty
-  const confirmDisabled = !preview.ok || confirming || (requiresDirtyConfirmation && !dirtyAccepted)
+  const requiresMigrateConfirmation = preview.requires_migrate
+  const confirmDisabled = !preview.ok || confirming || (requiresDirtyConfirmation && !dirtyAccepted) || (requiresMigrateConfirmation && !migrateAccepted)
 
   const output = useMemo(() => {
     const trimmed = preview.dry_run_output?.trim()
@@ -45,6 +47,7 @@ export function UpdatePreviewDialog({
   }, [confirming, onCancel])
 
   const confirmAllowDirty = allowDirty || dirtyAccepted
+  const confirmMigrate = requiresMigrateConfirmation && migrateAccepted
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 backdrop-blur-sm">
@@ -102,7 +105,7 @@ export function UpdatePreviewDialog({
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                <span>dry-run 输出包含 migration 信号，请确认业务项目当前状态后再执行真实 Update。</span>
+                <span>{preview.requires_migrate ? '检测到该项目需要执行 0.5.x → 0.6.x 迁移，请确认后运行 migrate update。' : 'dry-run 输出包含 migration 信号，请确认业务项目当前状态后再执行真实 Update。'}</span>
               </div>
             </div>
           )}
@@ -143,15 +146,29 @@ export function UpdatePreviewDialog({
               </span>
             </label>
           )}
+          {requiresMigrateConfirmation && (
+            <label className="flex cursor-pointer select-none items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={migrateAccepted}
+                onChange={(event) => setMigrateAccepted(event.target.checked)}
+                className="mt-1 size-4 accent-primary"
+                disabled={confirming}
+              />
+              <span className="text-amber-800">
+                我确认该项目正在从 <span className="font-mono">0.5.x</span> 升级到 <span className="font-mono">0.6.x</span>，执行 <span className="font-mono">tl update --force --migrate</span>。
+              </span>
+            </label>
+          )}
         </div>
 
         <footer className="flex items-center justify-end gap-2 border-t px-5 py-4">
           <Button variant="outline" onClick={onCancel} disabled={confirming}>
             取消
           </Button>
-          <Button onClick={() => onConfirm(confirmAllowDirty)} disabled={confirmDisabled}>
+          <Button onClick={() => onConfirm(confirmAllowDirty, confirmMigrate)} disabled={confirmDisabled}>
             {confirming && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
-            {confirming ? '执行中…' : '确认 Update'}
+            {confirming ? '执行中…' : requiresMigrateConfirmation ? '确认 Migrate Update' : '确认 Update'}
           </Button>
         </footer>
       </section>

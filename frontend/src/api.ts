@@ -54,7 +54,7 @@ interface PywebviewAPI {
   get_project_git_summary(path: string): Promise<GitSummary>
   preview_project_update(path: string): Promise<UpdatePreview>
   init_project(path: string): Promise<OperationReport>
-  update_project(path: string, allow_dirty: boolean): Promise<OperationReport>
+  update_project(path: string, allow_dirty: boolean, migrate?: boolean): Promise<OperationReport>
   list_outdated_projects(): Promise<ProjectStatus[]>
   batch_update_projects(paths: string[] | null, allow_dirty: boolean): Promise<BatchUpdateReport>
   remember_project(path: string): Promise<void>
@@ -284,8 +284,8 @@ export const api = {
     return (await getApi()).init_project(path)
   },
 
-  async updateProject(path: string, allowDirty: boolean): Promise<OperationReport> {
-    return (await getApi()).update_project(path, allowDirty)
+  async updateProject(path: string, allowDirty: boolean, migrate: boolean = false): Promise<OperationReport> {
+    return (await getApi()).update_project(path, allowDirty, migrate)
   },
 
   async listOutdatedProjects(): Promise<ProjectStatus[]> {

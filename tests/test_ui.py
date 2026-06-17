@@ -112,7 +112,7 @@ class TrellisManagerUiTest(unittest.TestCase):
                     "recent_projects": [str(project)],
                     "official_repo_url": "https://github.com/beilo/Trellis.git",
                     "accelerated_repo_url": "https://xget.xi-xu.me/gh/beilo/Trellis.git",
-                    "distribution_branch": "sync/v0.6.0-rc",
+                    "distribution_branch": "beilo/main",
                 },
             )
 
