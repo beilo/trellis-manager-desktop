@@ -93,7 +93,11 @@ Added project-local Paseo workflow config, executor, agent skill, tests, changel
 
 ### Main Changes
 
-(Add details)
+- Default Trellis tool distribution now follows `beilo/main`, while UI version semantics remain the Trellis CLI package version.
+- Git tool-repo install/update now uses root `pnpm build`, matching zip install and letting the Trellis workspace own core/CLI build order.
+- Project update preview detects the explicit `0.5.x -> 0.6.x` migrate case and the UI requires confirmation before running `tl update --force --migrate`.
+- Wrapper checks now verify `tl mem help` / `trellis mem help` and expose `mem_help_ok`.
+- Backend quality spec documents the Beilo distribution, migrate update, and MEM wrapper contracts.
 
 ### Git Commits
 
@@ -103,7 +107,12 @@ Added project-local Paseo workflow config, executor, agent skill, tests, changel
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] `python3 -m py_compile main.py launcher.py app/*.py scripts/*.py tests/*.py`
+- [OK] `python3 -m unittest discover tests -v`
+- [OK] `cd frontend && npm run build`
+- [OK] `git diff --check`
+- [OK] `~/.beilo-trellis/bin/tl mem help`
+- [OK] `~/.beilo-trellis/bin/trellis mem help`
 
 ### Status
 
@@ -206,6 +215,39 @@ Added project-local Paseo workflow config, executor, agent skill, tests, changel
 - [OK] `python3 -m unittest discover -s tests`
 - [OK] `python3 -m py_compile app/ops.py app/api.py scripts/build_app.py scripts/build_standalone_app.py`
 - [OK] `git diff --check`
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 7: Adapt manager to Beilo Trellis 0.6
+
+**Date**: 2026-06-17
+**Task**: Adapt manager to Beilo Trellis 0.6
+**Branch**: `main`
+
+### Summary
+
+Updated Trellis Manager defaults to Beilo distribution branch beilo/main, aligned Git builds to root pnpm build, added explicit 0.5.x to 0.6.x migrate update confirmation, verified wrapper mem help support, and documented the new backend contract.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ab94074` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
 
 ### Status
 
