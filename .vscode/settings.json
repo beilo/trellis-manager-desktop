@@ -5,5 +5,6 @@
         "source.fixAll.eslint",
         "source.fixAll.stylelint"
     ],
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "eslint.codeActionsOnSave.mode": "all"
 }
