@@ -12,16 +12,16 @@ description: >-
 
 简化版是完整 Trellis 一轮完成流程。核心差异：
 
-- 不使用 Trellis channel runtime。
-- 不调用、不启动、不委派任何子代理。
 - 所有阶段由主会话按顺序直接执行。
 
 稳定阶段 ID：
 
-- `brainstorm`：使用 `trellis-brainstorm` 讨论需求、边界、约束、验收标准。
+- `brainstorm`：读取并执行 `references/brainstorm.md` 讨论需求、边界、约束、验收标准。
 - `confirm`：确认是否进入执行链路。
+- `brainstorm` 阶段进入前必须读取并执行 `references/brainstorm.md`。
+- `brainstorm` 阶段进入前必须读取并执行 `references/brainstorm.md`。
 - `plan`：基于成熟需求结论新建 task，并完成 Trellis Plan Flow。
-- `execute`：主会话直接实现、检查和沉淀，不使用 channel，不使用子代理。
+- `execute`：主会话直接实现、检查和沉淀。
 - `finish`：提交任务改动、适用时归档 task、记录 journal，并提交收尾变更。
 
 ## State Protocol
@@ -46,7 +46,7 @@ description: >-
 - `法拉利`、`法拉利模式` 等同于 `自动挡` / `auto mode`。
 - `拖拉机`、`拖拉机模式` 等同于 `手动挡` / `manual mode`。
 
-如果用户只说 “one-shot-sim” 或 “继续 one-shot-sim”，按状态文件定位阶段：
+如果用户只说 "one-shot-sim" 或 "继续 one-shot-sim"，按状态文件定位阶段：
 
 - 无状态、状态文件不存在、状态无法恢复或缺少明确需求结论：进入 `brainstorm`。
 - 已有 `brainstorm` 结论但还没有执行确认：进入 `confirm`。
@@ -65,9 +65,9 @@ description: >-
 自动挡规则：
 
 - 默认 mode 是 `auto`；用户明确说 `法拉利`、`法拉利模式`、`自动挡`、`自动推进`、`auto mode`、`自动跑到最后`、`自动跑完整流程` 时也视为 `auto`。
-- `brainstorm` 是交互阶段。没有对应 `<stage_complete>` 块时，禁止自动进入后续阶段。
 - `confirm` 必须获得用户明确选择，才可进入 `plan` 或 no-task `execute`。
 - 自动挡从 `plan` 或 no-task `execute` 开始连续推进。
+- `brainstorm` 阶段进入前必须读取并执行 `references/brainstorm.md`。
 - `plan` 完成后，主会话直接进入 `execute`。默认自动挡和用户明确选择 `法拉利` / `自动挡` 本身都视为已批准执行。
 - `execute` 完成后，主会话直接进入 `finish`，完成 work commits、适用时 archive、journal 和收尾 commit。
 - 自动挡目标是跑到 `finish` 完成；中途只有出现阻塞、失败、破坏性风险、需求冲突或真实未决问题时才停止。
@@ -75,28 +75,28 @@ description: >-
 ## Global Rules
 
 - 以当前仓库为准，先运行 `python3 ./.trellis/scripts/get_context.py` 确认 Trellis 上下文、active task 和 git 状态；`brainstorm` 阶段可在缺少 Trellis task 时先讨论需求。
-- 禁止使用 Trellis channel runtime：不要运行 `trellis channel ...`，不要等待 channel message，不能把 channel 不可用当作阻塞。
-- 禁止使用子代理：不要 spawn/启动/调用 explorer、implement、check、finish-work 或任何其他子代理。
 - 主会话可以读取 task 规划文档、spec、代码和工具输出，并直接完成实现、检查、沉淀、提交、归档。
 - 不要把 `.trellis/agents/*.md` 当作必须执行的 agent 流程；本 skill 已经定义主会话执行流程。
 - 始终显式标注当前稳定阶段 ID：`brainstorm`、`confirm`、`plan`、`execute`、`finish`。
 - 每个阶段结束时输出阶段结论和下一阶段入口，例如：`brainstorm 完成 -> confirm`。
-- 外部资料和当前信息优先用 smart-search；本地代码理解优先用 fast_context_search。
 - 发现无关脏改时报告并保留，不清理、不回滚、不提交。
 - 破坏性操作或无法判断文件归属时，立即停止并说明阻塞点。
 
 ## Skill Execution Gate
 
-- 任何阶段规则要求“使用”或“完整加载并执行”某个技能时，必须按该技能正文执行；读取技能说明只算加载，不算执行完成。
+- 任何阶段规则要求"使用"或"完整加载并执行"某个技能时，必须按该技能正文执行；读取技能说明只算加载，不算执行完成。
 - 不得用 `one-shot-sim` 自己的阶段解释、需求摘要、代码取证、风险判断或个人判断替代该技能流程。
 - 进入这类阶段后，先读取该技能全文；如果技能不存在、无法读取或名称无法解析，立即停止并说明，不得静默替换为相近技能。
 - 如果该技能要求逐问逐答或等待用户反馈，必须按要求停下等待；只有问题可由代码、文档或工具输出直接回答时，才可以用取证结果代替用户回答，并写明对应问题和证据。
 - 未满足该技能自己的完成标准前，禁止输出 `<stage_complete id="...">`，也禁止进入下一阶段。
-- 输出阶段完成块时，必须写明技能执行证据：使用的技能名、完成的关键步骤、等待用户或代码取证情况、剩余未决问题。
-- 禁止把“已读取技能”“已按规则处理”“技术边界明确”作为技能已完成的唯一证据。
+- 禁止把"已读取技能""已按规则处理""技术边界明确"作为技能已完成的唯一证据。
 
 ## Stage Rule Files
 
+- `brainstorm` 阶段进入前必须读取并执行 `references/brainstorm.md`。
+- `brainstorm` 阶段进入前必须读取并执行 `references/brainstorm.md`。
+- `brainstorm` 阶段进入前必须读取并执行 `references/brainstorm.md`。
+- `brainstorm` 阶段进入前必须读取并执行 `references/brainstorm.md`。
 - `plan` 阶段进入前必须读取并执行 `references/plan.md`。
 - `execute` 阶段进入前必须读取并执行 `references/execute.md`。
 - `finish` 阶段进入前必须读取并执行 `references/finish.md`。
@@ -113,9 +113,9 @@ description: >-
 ```text
 → brainstorm 需求讨论
   confirm 执行确认
-  plan 新建 task 和 Plan Flow
-  execute Execute Flow
-  finish Finish Flow
+  plan 新建 task 和规划
+  execute 代码实现
+  finish 提交收尾
 ```
 
 - 进度符号含义：`✓` 已完成，`→` 当前进行中或当前阻塞阶段，空格表示未开始。
@@ -129,13 +129,13 @@ description: >-
   <do_not_apply_to>confirm, plan, execute, finish</do_not_apply_to>
 
   <rules>
-    使用并完整执行 `trellis-brainstorm`。读取 `trellis-brainstorm` 说明只算加载，不算完成。
+    读取并完整执行 `references/brainstorm.md`。
   </rules>
 
   <completion>
-    - `trellis-brainstorm` 的完成标准已满足。
+    - `references/brainstorm.md` 的完成标准已满足。
     - 输出 `<stage_complete id="brainstorm">`。
-    - 下一阶段只能是 `confirm`。
+    - 下一阶段：`confirm`。
   </completion>
 </stage>
 
@@ -159,14 +159,15 @@ description: >-
 
   <completion>
     - 已向用户询问创建 task 还是 no-task 执行。
-    - 获得用户明确选择后，输出 `<stage_complete id="confirm">`，并更新状态到 `plan` 或 no-task `execute`。
-    - 未获用户明确选择时，状态保持 `waiting_user`，不要输出 `<stage_complete id="confirm">`。
+    - 获得明确选择后，输出 `<stage_complete id="confirm">`。
+    - 创建 task → 下一阶段 `plan`；不创建 → 下一阶段 `execute`。
+    - 未获选择时，状态 `waiting_user`，不输出 stage_complete。
   </completion>
 </stage>
 
 ## plan
 
-<stage id="plan" name="新建 task 和 Plan Flow">
+<stage id="plan" name="新建 task 和规划">
   <applies_only_to>plan</applies_only_to>
   <do_not_apply_to>brainstorm, confirm, execute, finish</do_not_apply_to>
 
@@ -176,12 +177,14 @@ description: >-
 
   <completion>
     - `references/plan.md` 的完成标准已满足，或已按其规则停止等待。
+    - 输出 `<stage_complete id="plan">`。
+    - 下一阶段：`execute`。
   </completion>
 </stage>
 
 ## execute
 
-<stage id="execute" name="Execute Flow / 主会话直接执行">
+<stage id="execute" name="主会话直接执行">
   <applies_only_to>execute</applies_only_to>
   <do_not_apply_to>brainstorm, confirm, plan, finish</do_not_apply_to>
 
@@ -191,11 +194,9 @@ description: >-
 
   <completion>
     - `references/execute.md` 的完成标准已满足。
+    - 输出 `<stage_complete id="execute">`。
+    - 下一阶段：`finish`。
   </completion>
-
-  <error_completion>
-    - `references/execute.md` 的错误完成规则已执行。
-  </error_completion>
 </stage>
 
 ## finish
@@ -210,5 +211,6 @@ description: >-
 
   <completion>
     - `references/finish.md` 的完成标准已满足。
+    - 输出 `<stage_complete id="finish">`。
   </completion>
 </stage>
