@@ -172,7 +172,10 @@ Added project-local Paseo workflow config, executor, agent skill, tests, changel
 
 ### Main Changes
 
-(Add details)
+- Added desktop backend operations for initialized-project Configure and explicit GitNexus setup.
+- Exposed new pywebview and frontend API wrappers, then wired ProjectCard buttons and App handlers.
+- Made manual Update available for any initialized project while preserving the preview/confirm flow.
+- Documented action terminology in CONTEXT, added a GitNexus ADR, and captured the cross-layer contract in backend code-spec.
 
 ### Git Commits
 
@@ -182,7 +185,13 @@ Added project-local Paseo workflow config, executor, agent skill, tests, changel
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] `python3 tests/test_ops.py`
+- [OK] `python3 tests/test_ui.py`
+- [OK] `npm run build`
+- [OK] `npm run lint`
+- [OK] `python3 -m py_compile main.py launcher.py app/*.py scripts/*.py tests/*.py`
+- [OK] `python3 -m unittest discover tests -v`
+- [OK] `git diff --check`
 
 ### Status
 
@@ -314,6 +323,39 @@ Clarified zip snapshot tool repository check copy to state that local source sna
 | Hash | Message |
 |------|---------|
 | `88240d8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 10: Desktop project action split
+
+**Date**: 2026-06-19
+**Task**: Desktop project action split
+**Branch**: `main`
+
+### Summary
+
+Split desktop project actions into Init, Configure, manual Update, and explicit GitNexus Setup. Added backend operations, frontend buttons/API wiring, regression tests, ADR, CONTEXT terminology, and backend code-spec contract.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `970d279` | (see git log) |
 
 ### Testing
 
