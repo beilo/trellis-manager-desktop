@@ -15,7 +15,9 @@ interface ProjectCardProps {
   allowDirty: boolean
   onCheck: () => void
   onInit: () => void
+  onConfigure: () => void
   onUpdate: () => void
+  onSetupGitNexus: () => void
   onOpenDir: () => void
   onOpenCursor: () => Promise<void>
   cursorStatus: EnvironmentItem | null
@@ -31,7 +33,9 @@ export function ProjectCard({
   allowDirty,
   onCheck,
   onInit,
+  onConfigure,
   onUpdate,
+  onSetupGitNexus,
   onOpenDir,
   onOpenCursor,
   cursorStatus,
@@ -39,8 +43,8 @@ export function ProjectCard({
   onAllowDirtyChange,
 }: ProjectCardProps) {
   const projectStatus = status?.status ?? 'unknown'
-  const recommendInit = Boolean(projectPath && status && status.exists && status.is_git && !status.has_trellis)
-  const recommendUpdate = Boolean(projectPath && status && status.exists && status.is_git && status.has_trellis && status.version_outdated)
+  const canInit = Boolean(projectPath && status && status.exists && status.is_git && !status.has_trellis)
+  const canInitializedAction = Boolean(projectPath && status && status.exists && status.is_git && status.has_trellis)
 
   const cursorDisabledReason = cursorLoading
     ? '正在检查 Cursor'
@@ -73,11 +77,11 @@ export function ProjectCard({
           <div className="flex flex-col gap-0.5">
             <span className="text-base font-bold text-foreground select-none">业务项目操作</span>
             <span className="text-xs text-muted-foreground select-none">
-              对当前选中项目执行检查、Init 或 Update。
+              对当前选中项目执行 Init、Configure、Update 或外部集成安装。
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap justify-end items-center gap-2 shrink-0">
           <Button variant="outline" size="sm" onClick={onCheck} disabled={loading || busy || !projectPath}>
             {loading && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {loading ? '检查中…' : '检查项目'}
@@ -86,7 +90,7 @@ export function ProjectCard({
             variant="default"
             size="sm"
             onClick={onInit}
-            disabled={busy || !projectPath || !recommendInit}
+            disabled={busy || !projectPath || !canInit}
           >
             {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {busy ? '处理中…' : 'Init'}
@@ -94,11 +98,29 @@ export function ProjectCard({
           <Button
             variant="default"
             size="sm"
+            onClick={onConfigure}
+            disabled={busy || !projectPath || !canInitializedAction}
+          >
+            {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
+            {busy ? '处理中…' : 'Configure'}
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
             onClick={onUpdate}
-            disabled={busy || !projectPath || !recommendUpdate}
+            disabled={busy || !projectPath || !canInitializedAction}
           >
             {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {busy ? '处理中…' : 'Update'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onSetupGitNexus}
+            disabled={busy || !projectPath || !canInitializedAction}
+          >
+            {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
+            {busy ? '处理中…' : 'GitNexus Setup'}
           </Button>
           <Button variant="outline" size="sm" onClick={onOpenDir} disabled={!projectPath}>
             <FolderOpen className="size-3" data-icon="inline-start" />

@@ -33,6 +33,7 @@ from app.ops import (
     check_environment,
     check_tool_repo,
     check_wrapper_commands,
+    configure_project,
     dataclass_to_dict,
     ensure_wrappers_and_path,
     get_project_git_summary as get_project_git_summary_op,
@@ -48,6 +49,7 @@ from app.ops import (
     push_task_to_helm,
     batch_update_projects as batch_update_projects_op,
     list_outdated_projects as list_outdated_projects_op,
+    setup_gitnexus_project,
     update_project,
 )
 from app.task_snapshot import read_all_task_snapshots, read_task_snapshot
@@ -353,6 +355,15 @@ class TrellisAPI:
         )
         return report.to_log_entry()
 
+    def configure_project(self, path: str) -> dict[str, Any]:
+        report = configure_project(
+            Path(path).expanduser(),
+            self._config.init_platforms,
+            self._config.developer_name,
+            self._runner,
+        )
+        return report.to_log_entry()
+
     def update_project(self, path: str, allow_dirty: bool = False, migrate: bool = False) -> dict[str, Any]:
         report = update_project(
             Path(path).expanduser(),
@@ -361,6 +372,10 @@ class TrellisAPI:
             runner=self._runner,
             tool_repo_dir=self._config.trellis_repo,
         )
+        return report.to_log_entry()
+
+    def setup_gitnexus_project(self, path: str) -> dict[str, Any]:
+        report = setup_gitnexus_project(Path(path).expanduser(), self._runner)
         return report.to_log_entry()
 
     def list_outdated_projects(self) -> list[dict[str, Any]]:

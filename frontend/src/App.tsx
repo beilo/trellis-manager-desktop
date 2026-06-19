@@ -583,6 +583,22 @@ export default function App() {
     }
   }, [selectedProject, addLog, addLogs, inspectProjectInner, loadOutdatedProjectsInner])
 
+  const handleConfigureProject = useCallback(async () => {
+    if (!selectedProject) return
+    setProjectBusy(true)
+    addLog('task', '== 配置业务项目 ==')
+    try {
+      const report = await api.configureProject(selectedProject)
+      addLogs(...reportToLogs(report))
+      await inspectProjectInner(selectedProject, true)
+      await loadOutdatedProjectsInner()
+    } catch (err) {
+      addLog('error', `失败：配置业务项目 - ${err}`)
+    } finally {
+      setProjectBusy(false)
+    }
+  }, [selectedProject, addLog, addLogs, inspectProjectInner, loadOutdatedProjectsInner])
+
   const handleUpdateProject = useCallback(async () => {
     if (!selectedProject) return
 
@@ -629,6 +645,31 @@ export default function App() {
       setProjectBusy(false)
     }
   }, [selectedProject, addLog, addLogs, inspectProjectInner, loadOutdatedProjectsInner])
+
+  const handleSetupGitNexus = useCallback(async () => {
+    if (!selectedProject) return
+    const dirtyWarning = selectedProjectStatus?.dirty
+      ? '\n\n当前项目有未提交变更，GitNexus setup 可能产生额外 diff。'
+      : ''
+    const confirmed = window.confirm(`确认在当前项目执行 GitNexus Setup？${dirtyWarning}`)
+    if (!confirmed) {
+      addLog('info', '已取消 GitNexus Setup。')
+      return
+    }
+
+    setProjectBusy(true)
+    addLog('task', '== GitNexus Setup ==')
+    try {
+      const report = await api.setupGitNexusProject(selectedProject)
+      addLogs(...reportToLogs(report))
+      await inspectProjectInner(selectedProject, true)
+      await loadOutdatedProjectsInner()
+    } catch (err) {
+      addLog('error', `失败：GitNexus Setup - ${err}`)
+    } finally {
+      setProjectBusy(false)
+    }
+  }, [selectedProject, selectedProjectStatus, addLog, addLogs, inspectProjectInner, loadOutdatedProjectsInner])
 
   const handleOpenDir = useCallback(async () => {
     if (!selectedProject) return
@@ -848,7 +889,9 @@ export default function App() {
                 allowDirty={allowDirty}
                 onCheck={() => handleCheckProject()}
                 onInit={handleInitProject}
+                onConfigure={handleConfigureProject}
                 onUpdate={handleUpdateProject}
+                onSetupGitNexus={handleSetupGitNexus}
                 onOpenDir={handleOpenDir}
                 onOpenCursor={handleOpenCursor}
                 cursorStatus={cursorStatus}

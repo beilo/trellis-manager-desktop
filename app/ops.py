@@ -226,6 +226,10 @@ def project_update_preview_command(bin_dir: Path = DEFAULT_BIN_DIR) -> list[str]
     return [*project_update_command(bin_dir), "--dry-run"]
 
 
+def gitnexus_setup_command() -> list[str]:
+    return ["npx", "--yes", "gitnexus", "setup"]
+
+
 def requires_migrate_update(installed: str | None, latest: str | None) -> bool:
     """0.5 -> 0.6 是 Trellis 官方要求的显式迁移路径。"""
     return _major_minor(installed) == (0, 5) and _major_minor(latest) == (0, 6)
@@ -1123,6 +1127,36 @@ def init_project(
     )
 
 
+def configure_project(
+    project_dir: Path,
+    platforms: list[str],
+    developer_name: str,
+    runner: CommandRunner | None = None,
+    bin_dir: Path = DEFAULT_BIN_DIR,
+) -> OperationReport:
+    runner = runner or CommandRunner()
+    if not developer_name.strip():
+        raise OperationError("未配置开发者名，请在设置中填写后再配置。")
+    if not platforms:
+        raise OperationError("未选择初始化平台，请在设置中至少选择一个平台。")
+    status = inspect_project(str(project_dir), runner)
+    if not status.is_git:
+        raise OperationError("目标项目必须是 git 仓库。")
+    if not status.has_trellis:
+        raise OperationError("目标项目尚未安装 Trellis，请先 init。")
+    commands: list[CommandResult] = []
+    init_result = runner.run(project_init_command(platforms, developer_name.strip(), bin_dir), cwd=status.path, timeout=300)
+    commands.append(init_result)
+    _raise_if_failed(init_result, "项目 configure 失败。", commands)
+    return OperationReport(
+        title="配置业务项目",
+        ok=True,
+        message="业务项目 Trellis 配置已更新。",
+        commands=commands,
+        details={"project": str(status.path)},
+    )
+
+
 def update_project(
     project_dir: Path,
     allow_dirty: bool = False,
@@ -1161,6 +1195,34 @@ def update_project(
             "migrate": "true" if migrate else "false",
             "status": status_result.stdout.strip(),
             "diff_stat": diff_result.stdout.strip(),
+        },
+    )
+
+
+def setup_gitnexus_project(
+    project_dir: Path,
+    runner: CommandRunner | None = None,
+) -> OperationReport:
+    runner = runner or CommandRunner()
+    status = inspect_project(str(project_dir), runner)
+    if not status.is_git:
+        raise OperationError("目标项目必须是 git 仓库。")
+    if not status.has_trellis:
+        raise OperationError("目标项目尚未安装 Trellis，请先 init。")
+    commands: list[CommandResult] = []
+    _, dirty_output, dirty_result = git_status_short(status.path, runner)
+    commands.append(dirty_result)
+    setup_result = runner.run(gitnexus_setup_command(), cwd=status.path, timeout=300)
+    commands.append(setup_result)
+    _raise_if_failed(setup_result, "GitNexus setup 失败。", commands)
+    return OperationReport(
+        title="安装 GitNexus 集成",
+        ok=True,
+        message="GitNexus setup 已完成。",
+        commands=commands,
+        details={
+            "project": str(status.path),
+            "dirty_before": dirty_output,
         },
     )
 

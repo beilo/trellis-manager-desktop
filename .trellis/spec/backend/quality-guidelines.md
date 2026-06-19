@@ -276,6 +276,87 @@ runner.run(project_update_command(bin_dir, migrate=migrate), cwd=project)
 
 迁移判断归后端命令层所有；前端只展示预览结果并收集用户确认，不重新实现版本比较。
 
+## Scenario: 桌面项目动作和外部集成安装
+
+### 1. Scope / Trigger
+
+- Trigger: 修改业务项目卡上的 Init / Configure / Update / 外部集成按钮，或新增业务项目 pywebview 操作。
+- 适用范围：`app/ops.py` 项目操作函数、`app/api.py` pywebview 桥接、`app/runner.py` 命令白名单、`frontend/src/api.ts` 包装、`frontend/src/components/ProjectCard.tsx` 状态矩阵、`frontend/src/App.tsx` 操作 handler。
+- Trellis 项目生命周期动作和外部集成安装动作必须保持语义分离。
+
+### 2. Signatures
+
+- `init_project(project_dir, platforms, developer_name, runner=None, bin_dir=DEFAULT_BIN_DIR) -> OperationReport`
+- `configure_project(project_dir, platforms, developer_name, runner=None, bin_dir=DEFAULT_BIN_DIR) -> OperationReport`
+- `update_project(project_dir, allow_dirty=False, migrate=False, runner=None, bin_dir=DEFAULT_BIN_DIR, tool_repo_dir=DEFAULT_REPO_DIR) -> OperationReport`
+- `setup_gitnexus_project(project_dir, runner=None) -> OperationReport`
+- `gitnexus_setup_command() -> ["npx", "--yes", "gitnexus", "setup"]`
+- API bridge:
+  - `TrellisAPI.configure_project(path: str) -> dict`
+  - `TrellisAPI.setup_gitnexus_project(path: str) -> dict`
+- Frontend wrappers:
+  - `api.configureProject(path: string): Promise<OperationReport>`
+  - `api.setupGitNexusProject(path: string): Promise<OperationReport>`
+
+### 3. Contracts
+
+- `Init` 只适用于 git 项目且项目内没有 `.trellis`；成功后必须继续执行 `tl update --force`。
+- `Configure` 只适用于 git 项目且项目内已有 `.trellis`；它复用 Manager 设置里的 `developer_name` 和 `init_platforms`，只运行 `tl init -y ... -u ...`，不得自动运行 `tl update --force`。
+- `Update` 只要求 git 项目且项目内已有 `.trellis`；手动按钮不得依赖 `version_outdated`，最新版项目也允许手动执行 `tl update --force`。
+- `GitNexus Setup` 只要求 git 项目且项目内已有 `.trellis`；它属于外部集成安装动作，必须先由前端确认，再运行固定参数数组 `npx --yes gitnexus setup`。
+- dirty 项目默认阻断 `Update`，除非用户显式允许；dirty 项目不得阻断 `GitNexus Setup`，但确认文案必须提醒可能产生额外 diff。
+- `CommandRunner.ALLOWED_EXECUTABLES` 可以包含 `npx`，但 GitNexus 命令参数必须由后端固定构造，禁止从 UI 拼接 shell 字符串。
+
+### 4. Validation & Error Matrix
+
+- 非 git 项目执行任一项目写动作 -> `OperationError("目标项目必须是 git 仓库。")`
+- 已有 `.trellis` 执行 `Init` -> `OperationError("目标项目已经存在 .trellis，请使用 update。")`
+- 没有 `.trellis` 执行 `Configure` / `Update` / `GitNexus Setup` -> `OperationError("目标项目尚未安装 Trellis，请先 init。")`
+- `developer_name` 为空执行 `Init` / `Configure` -> 中文 `OperationError` 提示先配置开发者名
+- `init_platforms` 为空执行 `Init` / `Configure` -> 中文 `OperationError` 提示至少选择一个平台
+- dirty 项目执行 `Update` 且 `allow_dirty=False` -> 阻断
+- dirty 项目执行 `GitNexus Setup` -> 不阻断，日志记录 `dirty_before`
+
+### 5. Good/Base/Bad Cases
+
+- Good: 未初始化 git 项目只启用 `Init`；初始化后启用 `Configure`、`Update`、`GitNexus Setup`。
+- Base: 已是最新版的 initialized 项目仍可点击 `Update`，然后走预览和确认弹窗。
+- Bad: 把 GitNexus setup 塞进 `Init`，导致首次接入 Trellis 时隐式安装外部集成。
+- Bad: `Configure` 运行后自动 `update --force`，让“修改开发者/平台配置”和“同步 Trellis 管理文件”重新混在一起。
+- Bad: 前端自己拼 `npx gitnexus setup` 字符串或让用户输入 GitNexus 命令参数。
+
+### 6. Tests Required
+
+- `init_project` 仍拒绝已初始化项目，并断言 init 成功后命令序列包含 `tl update --force`。
+- `configure_project` 覆盖配置校验、要求已初始化、只运行 `tl init -y ... -u ...`、不运行 update。
+- `update_project` 覆盖 initialized 且 current-version 项目仍可运行普通 update。
+- `setup_gitnexus_project` 覆盖要求已初始化、dirty 不阻断、命令数组等于 `["npx", "--yes", "gitnexus", "setup"]`。
+- Frontend build 必须通过，证明 API wrapper、ProjectCard props 和 App handler 类型一致。
+- UI 状态矩阵改动后至少静态检查 `ProjectCard` 不再用 `version_outdated` 决定手动 Update 是否可点。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+# 外部集成被隐式塞进 Trellis Init，用户无法区分副作用来源。
+runner.run(project_init_command(platforms, developer_name, bin_dir), cwd=project)
+runner.run(["npx", "--yes", "gitnexus", "setup"], cwd=project)
+runner.run(project_update_command(bin_dir), cwd=project)
+```
+
+#### Correct
+
+```python
+def setup_gitnexus_project(project_dir: Path, runner: CommandRunner | None = None) -> OperationReport:
+    status = inspect_project(str(project_dir), runner)
+    if not status.has_trellis:
+        raise OperationError("目标项目尚未安装 Trellis，请先 init。")
+    setup_result = runner.run(gitnexus_setup_command(), cwd=status.path, timeout=300)
+```
+
+外部集成安装必须是单独按钮、单独确认、单独日志；Trellis Init / Configure / Update 只处理 Trellis 生命周期语义。
+
 ## Scenario: 应用发包命令
 
 ### 1. Scope / Trigger

@@ -19,3 +19,19 @@ _Avoid_: 应用版本, 应用发布分支
 **工具仓库源码 zip**:
 A zip snapshot of the Trellis tool repository source used when GitHub clone or pull is unavailable.
 _Avoid_: 应用发布包
+
+**项目首次接入动作**:
+The desktop project action that runs Trellis `init` for a git project that does not yet have `.trellis`. In Manager this is `Init`, and it keeps the post-init forced update behavior.
+_Avoid_: Configure, GitNexus Setup
+
+**项目配置动作**:
+The desktop project action that reapplies configured developer name and platforms to an already initialized Trellis project. In Manager this is `Configure`; it does not synchronize managed Trellis files.
+_Avoid_: Init, Update, 外部集成安装动作
+
+**项目手动同步动作**:
+The desktop project action that runs Trellis `update --force` for an already initialized project, even when the project is already on the latest version.
+_Avoid_: Init, Configure, GitNexus Setup
+
+**外部集成安装动作**:
+The desktop project action that installs or configures a non-Trellis integration inside a business project. `GitNexus Setup` belongs here and stays separate from Trellis Init/Configure/Update.
+_Avoid_: Trellis 模板同步, 项目首次接入动作

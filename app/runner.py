@@ -12,6 +12,7 @@ ALLOWED_EXECUTABLES = {
     "git",
     "helm",
     "node",
+    "npx",
     "pnpm",
     "tl",
     "trellis",
