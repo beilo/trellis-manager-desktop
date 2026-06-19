@@ -256,3 +256,36 @@ Updated Trellis Manager defaults to Beilo distribution branch beilo/main, aligne
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: 添加使用说明入口
+
+**Date**: 2026-06-19
+**Task**: 添加使用说明入口
+**Branch**: `main`
+
+### Summary
+
+为 Trellis Manager Desktop 增加 Header 使用说明入口，通过后端 get_help_url/open_in_browser 打开 resources/help.html，并补充 one-shot-sim 自动挡 finish 提交许可规则。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d16c7784103f6c7eee637000f62f47350ebda722` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
