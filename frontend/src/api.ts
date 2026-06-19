@@ -64,6 +64,8 @@ interface PywebviewAPI {
   select_directory(): Promise<string | null>
   select_file?(file_types?: [string, string]): Promise<string | null>
   open_directory(path: string): Promise<void>
+  get_help_url?: () => Promise<string>
+  open_in_browser?: (url: string) => Promise<void>
   open_in_iterm(path: string): Promise<void>
   open_in_cursor?: (path: string) => Promise<void>
   list_project_tasks(path: string, include_archive: boolean): Promise<TrellisTaskSnapshot>
@@ -331,6 +333,22 @@ export const api = {
 
   async openDirectory(path: string): Promise<void> {
     return (await getApi()).open_directory(path)
+  },
+
+  async getHelpUrl(): Promise<string> {
+    const bridge = await getApi()
+    if (typeof bridge.get_help_url !== 'function') {
+      throw new Error('当前后端未提供使用说明地址接口。')
+    }
+    return bridge.get_help_url()
+  },
+
+  async openInBrowser(url: string): Promise<void> {
+    const bridge = await getApi()
+    if (typeof bridge.open_in_browser !== 'function') {
+      throw new Error('当前后端未提供浏览器打开接口。')
+    }
+    return bridge.open_in_browser(url)
   },
 
   async openInIterm(path: string): Promise<void> {

@@ -12,6 +12,10 @@
 
 `main.py` 支持通过 `TRELLIS_USE_DEV_SERVER=1` 环境变量强制使用 Vite dev server；否则优先加载 `frontend/dist/index.html`（不存在时回退到 dev server）。
 
+## 用户使用说明
+
+终端用户使用说明维护在 `resources/help.html`。应用 Header 右侧的「使用说明」入口会通过后端 `get_help_url()` 和 `open_in_browser(url)` 用系统浏览器打开这份本地 HTML。
+
 ## 运行
 
 ### 开发模式（推荐）

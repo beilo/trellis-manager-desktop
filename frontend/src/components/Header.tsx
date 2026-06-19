@@ -1,7 +1,7 @@
 import { StatusBadge } from './StatusBadge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { FolderGit2, LayoutDashboard, Settings, Wrench } from 'lucide-react'
+import { BookOpen, FolderGit2, LayoutDashboard, Settings, Wrench } from 'lucide-react'
 import type { ActiveTab, PlatformInfo, Status } from '@/types'
 
 interface HeaderProps {
@@ -9,10 +9,11 @@ interface HeaderProps {
   readyStatus: Status
   activeTab: ActiveTab
   onTabChange: (tab: ActiveTab) => void
+  onOpenHelp?: () => void
   onOpenSettings?: () => void
 }
 
-export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOpenSettings }: HeaderProps) {
+export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOpenHelp, onOpenSettings }: HeaderProps) {
   const platformLabel = platformInfo?.is_macos ? 'macOS' : '非 macOS'
   const platformStatus: Status = platformInfo?.is_macos ? 'ok' : 'error'
   const pythonLabel = platformInfo ? `Python ${platformInfo.python_version}` : 'Python 3'
@@ -79,6 +80,11 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
           </Button>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {onOpenHelp && (
+            <Button variant="ghost" size="icon-sm" className="rounded-full text-muted-foreground hover:text-foreground" onClick={onOpenHelp} title="使用说明" aria-label="使用说明">
+              <BookOpen className="size-3.5" />
+            </Button>
+          )}
           {onOpenSettings && (
             <Button variant="ghost" size="icon-sm" className="rounded-full text-muted-foreground hover:text-foreground" onClick={onOpenSettings} title="工具链设置">
               <Settings className="size-3.5" />

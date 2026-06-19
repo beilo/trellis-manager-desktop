@@ -4,8 +4,11 @@ import json
 import platform
 import shutil
 import subprocess
+import sys
+import webbrowser
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 import webview
 
@@ -84,6 +87,20 @@ class TrellisAPI:
 
     def _restart_project_watchers(self) -> None:
         file_watcher.start_project_watchers(self.get_projects())
+
+    def _resource_file(self, relative_path: str) -> Path:
+        candidates: list[Path] = []
+        frozen_root = getattr(sys, "_MEIPASS", None)
+        if frozen_root:
+            candidates.append(Path(frozen_root) / relative_path)
+
+        app_root = Path(__file__).resolve().parents[1]
+        candidates.append(app_root / relative_path)
+
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return candidates[0]
 
     # ── 配置 ──
 
@@ -415,6 +432,22 @@ class TrellisAPI:
     def open_directory(self, path: str) -> None:
         expanded = str(Path(path).expanduser())
         subprocess.Popen(["open", expanded])  # noqa: S603,S607 - macOS only, safe path
+
+    def get_help_url(self) -> str:
+        """返回本地使用说明 HTML 的 file URL。"""
+        help_path = self._resource_file("resources/help.html")
+        if not help_path.exists():
+            raise RuntimeError(f"未找到使用说明文件：{help_path}")
+        return help_path.resolve().as_uri()
+
+    def open_in_browser(self, url: str) -> None:
+        """用系统默认浏览器打开受支持的 URL。"""
+        parsed = urlparse(url)
+        scheme = parsed.scheme.lower()
+        if scheme not in {"file", "http", "https"}:
+            raise RuntimeError(f"不支持打开此类链接：{scheme or '空协议'}")
+        if not webbrowser.open(url, new=2):
+            raise RuntimeError("系统浏览器打开失败。")
 
     def open_in_iterm(self, project_path: str) -> None:
         """在 iTerm2 中打开业务项目根目录。"""

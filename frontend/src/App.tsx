@@ -468,6 +468,16 @@ export default function App() {
     setSettingsOpen(true)
   }, [])
 
+  const handleOpenHelp = useCallback(async () => {
+    try {
+      const helpUrl = await api.getHelpUrl()
+      await api.openInBrowser(helpUrl)
+      addLog('info', `已打开使用说明：${helpUrl}`)
+    } catch (err) {
+      addLog('error', `打开使用说明失败：${err}`)
+    }
+  }, [addLog])
+
   useEffect(() => {
     void Promise.resolve().then(loadOutdatedProjectsInner)
   }, [projects, loadOutdatedProjectsInner])
@@ -750,6 +760,7 @@ export default function App() {
           readyStatus={readyStatus}
           activeTab={activeTab}
           onTabChange={handleTabChange}
+          onOpenHelp={handleOpenHelp}
           onOpenSettings={handleOpenSettings}
         />
 

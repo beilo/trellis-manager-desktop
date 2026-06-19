@@ -207,6 +207,10 @@ description: >-
 
   <rules>
     读取并完整执行 `references/finish.md`。
+
+    在 one-shot-sim 自动挡中，用户启动本流程即视为允许 finish 自动提交。
+    finish 可以自动执行 work commit、task archive、journal 记录和收尾 commit。
+    只有用户明确禁止提交，或当前是 manual / 拖拉机 / 手动挡时，才停止等待确认。
   </rules>
 
   <completion>

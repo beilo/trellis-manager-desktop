@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trellis Manager Desktop 使用说明</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f8f4ec;
+        --card: #fffdf8;
+        --text: #2a2722;
+        --muted: #6f675d;
+        --border: #ded3c3;
+        --accent: #8a5a27;
+        --accent-soft: #efe2cf;
+        --code: #f2eadf;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.7;
+      }
+
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 48px 24px 72px;
+      }
+
+      header {
+        margin-bottom: 28px;
+      }
+
+      h1,
+      h2,
+      h3 {
+        line-height: 1.25;
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: 34px;
+        font-weight: 650;
+      }
+
+      h2 {
+        margin: 32px 0 12px;
+        font-size: 22px;
+      }
+
+      h3 {
+        margin: 20px 0 8px;
+        font-size: 17px;
+      }
+
+      p {
+        margin: 8px 0;
+      }
+
+      code {
+        border-radius: 6px;
+        background: var(--code);
+        padding: 2px 6px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.92em;
+      }
+
+      .lead {
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 16px;
+      }
+
+      .card {
+        margin: 16px 0;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: var(--card);
+        padding: 20px 22px;
+        box-shadow: 0 10px 30px rgb(43 32 18 / 8%);
+      }
+
+      .toc {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+        padding: 0;
+        list-style: none;
+      }
+
+      .toc a {
+        display: block;
+        border-radius: 12px;
+        background: var(--accent-soft);
+        padding: 10px 12px;
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      .steps {
+        padding-left: 22px;
+      }
+
+      .note {
+        border-left: 4px solid var(--accent);
+        background: var(--accent-soft);
+        padding: 12px 14px;
+        color: var(--text);
+      }
+
+      footer {
+        margin-top: 36px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Trellis Manager Desktop 使用说明</h1>
+        <p class="lead">
+          Trellis Manager Desktop 是面向 macOS 的团队 Trellis 工具链管理客户端。它帮助你检查本机环境、下载和构建团队分发版 Trellis 工具仓库、创建 <code>tl</code> / <code>trellis</code> 命令入口，并对业务项目执行 Trellis 初始化或更新。
+        </p>
+      </header>
+
+      <section class="card" aria-labelledby="toc-title">
+        <h2 id="toc-title">快速导航</h2>
+        <ul class="toc">
+          <li><a href="#first-run">第一次使用</a></li>
+          <li><a href="#toolchain">工具链页</a></li>
+          <li><a href="#projects">项目页</a></li>
+          <li><a href="#kanban">看板页</a></li>
+          <li><a href="#faq">常见问题</a></li>
+        </ul>
+      </section>
+
+      <section id="first-run" class="card">
+        <h2>第一次使用</h2>
+        <ol class="steps">
+          <li>打开应用后，等待环境、工具仓库和命令入口的后台检查完成。</li>
+          <li>如果工具仓库尚未安装，进入「工具链」页，使用「下载 / 更新并构建」安装团队分发版 Trellis。</li>
+          <li>确认 <code>tl</code> 和 <code>trellis</code> 命令入口可用；必要时点击创建 wrapper 或修复 PATH。</li>
+          <li>进入「项目」页添加业务项目目录，然后执行初始化或更新。</li>
+        </ol>
+        <p class="note">应用启动只检查状态，不会自动下载、更新或修改你的业务项目。</p>
+      </section>
+
+      <section id="toolchain" class="card">
+        <h2>工具链页</h2>
+        <h3>环境检查</h3>
+        <p>用于确认 macOS、Python、Node、pnpm、开发者配置等基础条件是否满足。</p>
+        <h3>工具仓库</h3>
+        <p>默认使用团队分发版 Trellis 仓库。在线网络可用时，可以直接下载或更新并构建；如果 GitHub 访问受限，可以使用本地源码 zip 安装。</p>
+        <h3>命令入口</h3>
+        <p>确认 <code>tl</code> 和 <code>trellis</code> wrapper 是否指向本地工具仓库，并检查基础帮助命令是否可执行。</p>
+      </section>
+
+      <section id="projects" class="card">
+        <h2>项目页</h2>
+        <p>项目页用于管理业务项目。业务项目必须是 Git 仓库。</p>
+        <ul>
+          <li>没有 <code>.trellis</code> 的项目可以执行 init。</li>
+          <li>已经有 <code>.trellis</code> 的项目不能重复 init，只能 update。</li>
+          <li>项目 init 会先执行 <code>tl init -y</code>，再执行 <code>tl update --force</code>。</li>
+          <li>项目 update 默认使用 <code>tl update --force</code>；从 0.5.x 升级到 0.6.x 时，确认后使用迁移更新。</li>
+        </ul>
+        <p class="note">客户端不会替业务项目执行 <code>git add</code>、<code>commit</code> 或 <code>push</code>。更新后的项目改动需要你自行检查和提交。</p>
+      </section>
+
+      <section id="kanban" class="card">
+        <h2>看板页</h2>
+        <p>看板页聚合已添加项目中的 Trellis 任务，方便快速查看 planning、in_progress、completed、done 等状态。点击任务后会跳转到项目页复用任务详情能力。</p>
+      </section>
+
+      <section id="faq" class="card">
+        <h2>常见问题</h2>
+        <h3>为什么按钮会被锁住？</h3>
+        <p>下载、更新、构建、init、update 等写操作执行期间会锁住相关按钮，避免重复触发。检查类操作不会锁住主要操作。</p>
+        <h3>工具仓库 dirty 时为什么不能更新？</h3>
+        <p>为了避免覆盖本地修改，工具仓库存在未提交改动时会阻止在线更新。请先处理这些改动，或使用明确的重装流程。</p>
+        <h3>本地 zip 安装还需要 Node 和 pnpm 吗？</h3>
+        <p>需要。zip 安装的是源码，不是预构建 CLI，仍然需要本机有可用的 Node 和 pnpm 来安装依赖并构建。</p>
+        <h3>从 Finder 启动时找不到 Node 怎么办？</h3>
+        <p>如果你通过 nvm 安装 Node，客户端会补充当前用户目录下的常见 nvm Node 路径。仍失败时，请先在终端确认 Node 和 pnpm 可用。</p>
+      </section>
+
+      <footer>
+        本页面由项目内 <code>resources/help.html</code> 维护，应用 Header 右侧的「使用说明」入口会用系统浏览器打开它。
+      </footer>
+    </main>
+  </body>
+</html>
