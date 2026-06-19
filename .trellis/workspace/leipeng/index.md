@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
+- **Total Sessions**: 9
 - **Last Active**: 2026-06-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~291 | Active |
+| `journal-1.md` | ~324 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-06-19 | Clarify zip snapshot repo check status | `88240d8` | `main` |
 | 8 | 2026-06-19 | 添加使用说明入口 | `d16c7784103f6c7eee637000f62f47350ebda722` | `main` |
 | 7 | 2026-06-17 | Adapt manager to Beilo Trellis 0.6 | `ab94074` | `main` |
 | 6 | 2026-06-16 | 公共技能全局分发 | `53eb01d` | `main` |

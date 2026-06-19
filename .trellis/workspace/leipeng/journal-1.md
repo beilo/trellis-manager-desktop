@@ -135,7 +135,8 @@ Added project-local Paseo workflow config, executor, agent skill, tests, changel
 
 ### Main Changes
 
-(Add details)
+- Changed the zip snapshot success message from a pull-focused warning to an explicit local validation success message.
+- Added a regression test that builds a non-git Trellis source snapshot, verifies `source_type="zip_snapshot"`, and asserts no `git fetch` is attempted.
 
 ### Git Commits
 
@@ -145,7 +146,10 @@ Added project-local Paseo workflow config, executor, agent skill, tests, changel
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] `python3 -m py_compile main.py launcher.py app/*.py scripts/*.py tests/*.py`
+- [OK] `git diff --check`
+- [OK] `python3 -m unittest discover -s tests -p 'test_ops.py' -v`
+- [OK] `python3 -m unittest discover tests -v`
 
 ### Status
 
@@ -277,6 +281,39 @@ Updated Trellis Manager defaults to Beilo distribution branch beilo/main, aligne
 | Hash | Message |
 |------|---------|
 | `d16c7784103f6c7eee637000f62f47350ebda722` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 9: Clarify zip snapshot repo check status
+
+**Date**: 2026-06-19
+**Task**: Clarify zip snapshot repo check status
+**Branch**: `main`
+
+### Summary
+
+Clarified zip snapshot tool repository check copy to state that local source snapshot validation succeeded, and added regression coverage proving zip snapshots are validated locally without git fetch.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `88240d8` | (see git log) |
 
 ### Testing
 
