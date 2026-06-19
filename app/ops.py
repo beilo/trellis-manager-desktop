@@ -835,7 +835,7 @@ def check_tool_repo(
             ahead=None,
             behind=None,
             status="ok",
-            message="本地源码快照，不能在线 pull；如需更新请选择新的 zip。",
+            message="已检测本地源码快照有效；该安装方式不能在线 pull，如需更新请选择新的 zip。",
             source_type="zip_snapshot",
         )
     return RepoStatus(

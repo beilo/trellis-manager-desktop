@@ -541,6 +541,38 @@ class TrellisManagerOpsTest(unittest.TestCase):
             self.assertEqual(status.behind, 2)
             self.assertIn("可以更新", status.message)
 
+    def test_tool_repo_check_reports_valid_zip_snapshot_without_fetch(self) -> None:
+        class NonGitRunner:
+            def __init__(self) -> None:
+                self.calls: list[tuple[list[str], Path | None]] = []
+
+            def run(self, command: list[str | Path], cwd: Path | None = None, timeout: int = 60) -> CommandResult:
+                normalized = [str(part) for part in command]
+                self.calls.append((normalized, cwd))
+                if normalized[:3] == ["git", "rev-parse", "--is-inside-work-tree"]:
+                    return CommandResult(normalized, cwd, 1, "", "not git", 1)
+                return CommandResult(normalized, cwd, 0, "", "", 1)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "package.json").write_text("{}", encoding="utf-8")
+            (repo / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n", encoding="utf-8")
+            entry = repo / "packages" / "cli" / "bin" / "trellis.js"
+            entry.parent.mkdir(parents=True)
+            entry.write_text("#!/usr/bin/env node\n", encoding="utf-8")
+            package = repo / "packages" / "cli" / "package.json"
+            package.write_text(json.dumps({"version": "0.6.0"}), encoding="utf-8")
+            runner = NonGitRunner()
+
+            status = check_tool_repo(repo, runner)  # type: ignore[arg-type]
+
+            self.assertEqual(status.status, "ok")
+            self.assertEqual(status.source_type, "zip_snapshot")
+            self.assertFalse(status.is_git)
+            self.assertTrue(status.is_trellis_repo)
+            self.assertIn("已检测本地源码快照有效", status.message)
+            self.assertNotIn(["git", "fetch", "origin", DISTRIBUTION_BRANCH], [call[0] for call in runner.calls])
+
     def test_project_update_requires_confirmation_when_dirty(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
