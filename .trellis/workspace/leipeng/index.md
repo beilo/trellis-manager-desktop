@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
-- **Last Active**: 2026-06-19
+- **Total Sessions**: 11
+- **Last Active**: 2026-06-21
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~361 | Active |
+| `journal-1.md` | ~403 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-06-21 | 删除 Configure 项目动作 | `2ee0941` | `main` |
 | 10 | 2026-06-19 | Desktop project action split | `970d279` | `main` |
 | 9 | 2026-06-19 | Clarify zip snapshot repo check status | `88240d8` | `main` |
 | 8 | 2026-06-19 | 添加使用说明入口 | `d16c7784103f6c7eee637000f62f47350ebda722` | `main` |

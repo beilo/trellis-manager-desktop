@@ -368,3 +368,36 @@ Split desktop project actions into Init, Configure, manual Update, and explicit 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: 删除 Configure 项目动作
+
+**Date**: 2026-06-21
+**Task**: 删除 Configure 项目动作
+**Branch**: `main`
+
+### Summary
+
+彻底移除 Configure 项目动作：删除前端按钮和 API wrapper、后端 pywebview/ops 入口、相关单测，并同步 CONTEXT、GitNexus ADR 和 backend quality spec；验证通过 frontend build/lint、python3 tests/test_ops.py、git diff --check。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2ee0941` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
