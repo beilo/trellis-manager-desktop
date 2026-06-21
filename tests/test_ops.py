@@ -33,7 +33,6 @@ from app.ops import (  # noqa: E402
     check_helm_status,
     check_tool_repo,
     check_wrapper_commands,
-    configure_project,
     ensure_wrappers_and_path,
     ensure_zshrc_path,
     get_project_git_summary,
@@ -448,48 +447,6 @@ class TrellisManagerOpsTest(unittest.TestCase):
                 init_project(project, ["claude-code"], "alice", FakeRunner())  # type: ignore[arg-type]
 
             self.assertIn("已经存在 .trellis", str(error.exception))
-
-    def test_configure_project_runs_init_without_force_update(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            project = Path(tmp) / "project"
-            bin_dir = Path(tmp) / "bin"
-            project.mkdir()
-            (project / ".trellis").mkdir()
-            runner = FakeRunner()
-
-            report = configure_project(project, ["claude-code", "codex"], "alice", runner, bin_dir)  # type: ignore[arg-type]
-
-            self.assertTrue(report.ok)
-            self.assertEqual(report.title, "配置业务项目")
-            self.assertEqual(
-                [command.command for command in report.commands],
-                [[str(bin_dir / "tl"), "init", "-y", "--claude", "--codex", "-u", "alice"]],
-            )
-            self.assertNotIn([str(bin_dir / "tl"), "update", "--force"], [call[0] for call in runner.calls])
-
-    def test_configure_project_requires_existing_trellis(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            project = Path(tmp) / "project"
-            project.mkdir()
-
-            with self.assertRaises(OperationError) as error:
-                configure_project(project, ["claude-code"], "alice", FakeRunner())  # type: ignore[arg-type]
-
-            self.assertIn("尚未安装 Trellis", str(error.exception))
-
-    def test_configure_project_validates_developer_config(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            project = Path(tmp) / "project"
-            project.mkdir()
-            (project / ".trellis").mkdir()
-
-            with self.assertRaises(OperationError) as missing_name:
-                configure_project(project, ["claude-code"], "", FakeRunner())  # type: ignore[arg-type]
-            with self.assertRaises(OperationError) as missing_platforms:
-                configure_project(project, [], "alice", FakeRunner())  # type: ignore[arg-type]
-
-            self.assertIn("未配置开发者名", str(missing_name.exception))
-            self.assertIn("未选择初始化平台", str(missing_platforms.exception))
 
     def test_command_runner_rejects_non_whitelisted_executables(self) -> None:
         runner = CommandRunner()

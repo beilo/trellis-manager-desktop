@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-Trellis Manager Desktop has project actions for applying Trellis behavior to business projects. `Init` handles first-time Trellis onboarding, `Configure` reapplies developer/platform configuration to initialized projects, and `Update` manually synchronizes Trellis-managed files.
+Trellis Manager Desktop has project actions for applying Trellis behavior to business projects. `Init` handles first-time Trellis onboarding, and `Update` manually synchronizes Trellis-managed files.
 
 GitNexus setup is different: it invokes `npx --yes gitnexus setup`, belongs to an external integration, and can create files that are not Trellis-managed templates.
 
@@ -14,7 +14,7 @@ GitNexus setup is different: it invokes `npx --yes gitnexus setup`, belongs to a
 
 Expose `GitNexus Setup` as a separate, explicit project action.
 
-Manager will not fold GitNexus setup into `Init`, `Configure`, or `Update`. It will not detect whether GitNexus has already been set up. It will ask for confirmation before running the command, warn when the project is dirty, run `npx --yes gitnexus setup`, and record the operation result in the normal log.
+Manager will not fold GitNexus setup into `Init` or `Update`. It will not detect whether GitNexus has already been set up. It will ask for confirmation before running the command, warn when the project is dirty, run `npx --yes gitnexus setup`, and record the operation result in the normal log.
 
 ## Consequences
 

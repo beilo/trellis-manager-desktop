@@ -15,7 +15,6 @@ interface ProjectCardProps {
   allowDirty: boolean
   onCheck: () => void
   onInit: () => void
-  onConfigure: () => void
   onUpdate: () => void
   onSetupGitNexus: () => void
   onOpenDir: () => void
@@ -33,7 +32,6 @@ export function ProjectCard({
   allowDirty,
   onCheck,
   onInit,
-  onConfigure,
   onUpdate,
   onSetupGitNexus,
   onOpenDir,
@@ -77,7 +75,7 @@ export function ProjectCard({
           <div className="flex flex-col gap-0.5">
             <span className="text-base font-bold text-foreground select-none">业务项目操作</span>
             <span className="text-xs text-muted-foreground select-none">
-              对当前选中项目执行 Init、Configure、Update 或外部集成安装。
+              对当前选中项目执行 Init、Update 或外部集成安装。
             </span>
           </div>
         </div>
@@ -94,15 +92,6 @@ export function ProjectCard({
           >
             {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {busy ? '处理中…' : 'Init'}
-          </Button>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={onConfigure}
-            disabled={busy || !projectPath || !canInitializedAction}
-          >
-            {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
-            {busy ? '处理中…' : 'Configure'}
           </Button>
           <Button
             variant="default"

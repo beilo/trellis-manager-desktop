@@ -54,7 +54,6 @@ interface PywebviewAPI {
   get_project_git_summary(path: string): Promise<GitSummary>
   preview_project_update(path: string): Promise<UpdatePreview>
   init_project(path: string): Promise<OperationReport>
-  configure_project(path: string): Promise<OperationReport>
   update_project(path: string, allow_dirty: boolean, migrate?: boolean): Promise<OperationReport>
   setup_gitnexus_project(path: string): Promise<OperationReport>
   list_outdated_projects(): Promise<ProjectStatus[]>
@@ -286,10 +285,6 @@ export const api = {
 
   async initProject(path: string): Promise<OperationReport> {
     return (await getApi()).init_project(path)
-  },
-
-  async configureProject(path: string): Promise<OperationReport> {
-    return (await getApi()).configure_project(path)
   },
 
   async updateProject(path: string, allowDirty: boolean, migrate: boolean = false): Promise<OperationReport> {

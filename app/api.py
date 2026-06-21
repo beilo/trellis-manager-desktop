@@ -33,7 +33,6 @@ from app.ops import (
     check_environment,
     check_tool_repo,
     check_wrapper_commands,
-    configure_project,
     dataclass_to_dict,
     ensure_wrappers_and_path,
     get_project_git_summary as get_project_git_summary_op,
@@ -348,15 +347,6 @@ class TrellisAPI:
 
     def init_project(self, path: str) -> dict[str, Any]:
         report = init_project(
-            Path(path).expanduser(),
-            self._config.init_platforms,
-            self._config.developer_name,
-            self._runner,
-        )
-        return report.to_log_entry()
-
-    def configure_project(self, path: str) -> dict[str, Any]:
-        report = configure_project(
             Path(path).expanduser(),
             self._config.init_platforms,
             self._config.developer_name,

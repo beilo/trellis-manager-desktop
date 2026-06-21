@@ -1127,36 +1127,6 @@ def init_project(
     )
 
 
-def configure_project(
-    project_dir: Path,
-    platforms: list[str],
-    developer_name: str,
-    runner: CommandRunner | None = None,
-    bin_dir: Path = DEFAULT_BIN_DIR,
-) -> OperationReport:
-    runner = runner or CommandRunner()
-    if not developer_name.strip():
-        raise OperationError("未配置开发者名，请在设置中填写后再配置。")
-    if not platforms:
-        raise OperationError("未选择初始化平台，请在设置中至少选择一个平台。")
-    status = inspect_project(str(project_dir), runner)
-    if not status.is_git:
-        raise OperationError("目标项目必须是 git 仓库。")
-    if not status.has_trellis:
-        raise OperationError("目标项目尚未安装 Trellis，请先 init。")
-    commands: list[CommandResult] = []
-    init_result = runner.run(project_init_command(platforms, developer_name.strip(), bin_dir), cwd=status.path, timeout=300)
-    commands.append(init_result)
-    _raise_if_failed(init_result, "项目 configure 失败。", commands)
-    return OperationReport(
-        title="配置业务项目",
-        ok=True,
-        message="业务项目 Trellis 配置已更新。",
-        commands=commands,
-        details={"project": str(status.path)},
-    )
-
-
 def update_project(
     project_dir: Path,
     allow_dirty: bool = False,

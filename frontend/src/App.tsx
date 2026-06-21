@@ -583,22 +583,6 @@ export default function App() {
     }
   }, [selectedProject, addLog, addLogs, inspectProjectInner, loadOutdatedProjectsInner])
 
-  const handleConfigureProject = useCallback(async () => {
-    if (!selectedProject) return
-    setProjectBusy(true)
-    addLog('task', '== 配置业务项目 ==')
-    try {
-      const report = await api.configureProject(selectedProject)
-      addLogs(...reportToLogs(report))
-      await inspectProjectInner(selectedProject, true)
-      await loadOutdatedProjectsInner()
-    } catch (err) {
-      addLog('error', `失败：配置业务项目 - ${err}`)
-    } finally {
-      setProjectBusy(false)
-    }
-  }, [selectedProject, addLog, addLogs, inspectProjectInner, loadOutdatedProjectsInner])
-
   const handleUpdateProject = useCallback(async () => {
     if (!selectedProject) return
 
@@ -889,7 +873,6 @@ export default function App() {
                 allowDirty={allowDirty}
                 onCheck={() => handleCheckProject()}
                 onInit={handleInitProject}
-                onConfigure={handleConfigureProject}
                 onUpdate={handleUpdateProject}
                 onSetupGitNexus={handleSetupGitNexus}
                 onOpenDir={handleOpenDir}
