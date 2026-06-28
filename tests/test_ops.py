@@ -36,7 +36,6 @@ from app.ops import (  # noqa: E402
     ensure_wrappers_and_path,
     ensure_zshrc_path,
     get_project_git_summary,
-    gitnexus_setup_command,
     github_branch_zip_url,
     inspect_project,
     init_project,
@@ -50,8 +49,6 @@ from app.ops import (  # noqa: E402
     project_update_command,
     project_update_preview_command,
     push_task_to_helm,
-    sync_bundled_public_skills,
-    setup_gitnexus_project,
     update_project,
 )
 from app.runner import CommandResult, CommandRunner  # noqa: E402
@@ -141,13 +138,6 @@ class ToolRepoInstallRunner:
         normalized = [str(part) for part in command]
         self.calls.append((normalized, cwd))
         return CommandResult(normalized, cwd, 0, "", "", 1)
-
-
-def write_bundled_skill(source_root: Path, name: str, skill_text: str = "skill\n") -> Path:
-    skill_dir = source_root / name
-    skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text(skill_text, encoding="utf-8")
-    return skill_dir
 
 
 class HelmRunner:
@@ -464,9 +454,9 @@ class TrellisManagerOpsTest(unittest.TestCase):
     def test_command_runner_allows_npx(self) -> None:
         runner = CommandRunner(allowed={"npx"})
 
-        result = runner._prepare_command(gitnexus_setup_command())  # noqa: SLF001
+        result = runner._prepare_command(["npx", "--yes", "some-package"])  # noqa: SLF001
 
-        self.assertEqual(result, ["npx", "--yes", "gitnexus", "setup"])
+        self.assertEqual(result, ["npx", "--yes", "some-package"])
 
     def test_check_helm_status_reports_missing_cli(self) -> None:
         status = check_helm_status(HelmRunner(helm_installed=False))  # type: ignore[arg-type]
@@ -624,28 +614,6 @@ class TrellisManagerOpsTest(unittest.TestCase):
 
             self.assertTrue(report.ok)
             self.assertIn([str(Path.home() / ".beilo-trellis" / "bin" / "tl"), "update", "--force"], [call[0] for call in runner.calls])
-
-    def test_setup_gitnexus_project_runs_npx_without_dirty_block(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            project = Path(tmp)
-            (project / ".trellis").mkdir()
-            runner = FakeRunner()
-
-            report = setup_gitnexus_project(project, runner)  # type: ignore[arg-type]
-
-            self.assertTrue(report.ok)
-            self.assertEqual(report.title, "安装 GitNexus 集成")
-            self.assertIn(" M app.py", report.details["dirty_before"])
-            self.assertIn(["npx", "--yes", "gitnexus", "setup"], [call[0] for call in runner.calls])
-
-    def test_setup_gitnexus_project_requires_existing_trellis(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            project = Path(tmp)
-
-            with self.assertRaises(OperationError) as error:
-                setup_gitnexus_project(project, FakeRunner())  # type: ignore[arg-type]
-
-            self.assertIn("尚未安装 Trellis", str(error.exception))
 
     def test_project_inspection_dirty_current_version_is_ok(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -918,8 +886,6 @@ class TrellisManagerOpsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             repo = root / "Trellis"
-            bundled_skills = root / "bundled-skills"
-            write_bundled_skill(bundled_skills, "trellis-start")
             runner = ToolRepoInstallRunner()
 
             report = install_or_update_tool_repo(
@@ -928,13 +894,11 @@ class TrellisManagerOpsTest(unittest.TestCase):
                 official_repo_url="https://example.com/official.git",
                 accelerated_repo_url="https://example.com/mirror.git",
                 distribution_branch="release/custom",
-                global_skill_home_dir=root / "home",
-                bundled_skill_source_dir=bundled_skills,
             )
 
             self.assertTrue(report.ok)
             self.assertEqual(report.details["branch"], "release/custom")
-            self.assertEqual(report.details["synced_skills"], "trellis-start")
+            self.assertNotIn("synced_skills", report.details)
             self.assertIn(
                 ["git", "clone", "--branch", "release/custom", "https://example.com/mirror.git", str(repo)],
                 [call[0] for call in runner.calls],
@@ -1227,15 +1191,11 @@ class TrellisManagerOpsTest(unittest.TestCase):
                 for path in source.rglob("*"):
                     archive.write(path, path.relative_to(root))
 
-            bundled_skills = root / "bundled-skills"
-            write_bundled_skill(bundled_skills, "trellis-start")
             runner = FakeRunner()
             report = install_from_zip(
                 zip_path,
                 root / "Trellis",
                 runner=runner,  # type: ignore[arg-type]
-                global_skill_home_dir=root / "home",
-                bundled_skill_source_dir=bundled_skills,
             )
 
             self.assertTrue(report.ok)
@@ -1246,69 +1206,7 @@ class TrellisManagerOpsTest(unittest.TestCase):
                     ["pnpm", "build"],
                 ],
             )
-            self.assertEqual(report.details["synced_skills"], "trellis-start")
-            self.assertEqual(report.details["synced_skill_count"], "1")
-            agents_target = root / "home" / ".agents" / "skills" / "trellis-start"
-            codex_target = root / "home" / ".codex" / "skills" / "trellis-start"
-            claude_target = root / "home" / ".claude" / "skills" / "trellis-start"
-            self.assertTrue((agents_target / "SKILL.md").exists())
-            self.assertTrue(codex_target.is_symlink())
-            self.assertTrue(claude_target.is_symlink())
-            self.assertEqual(codex_target.readlink(), Path("..") / ".." / ".agents" / "skills" / "trellis-start")
-            self.assertEqual(claude_target.readlink(), Path("..") / ".." / ".agents" / "skills" / "trellis-start")
-
-    def test_sync_bundled_public_skills_replaces_targets_with_shared_symlinks(self) -> None:
-        """内置公共技能同步应强制覆盖旧入口，并让 Codex/Claude 指向 .agents 权威源。"""
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            source = root / "bundled"
-            alpha_source = write_bundled_skill(source, "alpha", "alpha skill\n")
-            (alpha_source / "agents").mkdir()
-            (alpha_source / "agents" / "openai.yaml").write_text("agent\n", encoding="utf-8")
-            write_bundled_skill(source, "beta", "beta skill\n")
-            (source / "invalid").mkdir()
-
-            home = root / "home"
-            agents_alpha = home / ".agents" / "skills" / "alpha"
-            agents_alpha.mkdir(parents=True)
-            (agents_alpha / "SKILL.md").write_text("old skill\n", encoding="utf-8")
-            agents_beta = home / ".agents" / "skills" / "beta"
-            agents_beta.parent.mkdir(parents=True, exist_ok=True)
-            agents_beta.write_text("old file\n", encoding="utf-8")
-            codex_target = home / ".codex" / "skills" / "alpha"
-            codex_target.parent.mkdir(parents=True)
-            codex_target.write_text("old file\n", encoding="utf-8")
-            claude_target = home / ".claude" / "skills" / "alpha"
-            shared = root / "shared"
-            shared.mkdir()
-            claude_target.parent.mkdir(parents=True)
-            claude_target.symlink_to(shared, target_is_directory=True)
-
-            details = sync_bundled_public_skills(source, home)
-
-            self.assertEqual(details["synced_skills"], "alpha,beta")
-            self.assertEqual(details["synced_skill_count"], "2")
-            self.assertEqual((agents_alpha / "SKILL.md").read_text(encoding="utf-8"), "alpha skill\n")
-            self.assertEqual((agents_alpha / "agents" / "openai.yaml").read_text(encoding="utf-8"), "agent\n")
-            self.assertEqual((agents_beta / "SKILL.md").read_text(encoding="utf-8"), "beta skill\n")
-            self.assertTrue(shared.exists())
-            for tool_name in [".codex", ".claude"]:
-                target = home / tool_name / "skills" / "alpha"
-                self.assertTrue(target.is_symlink())
-                self.assertEqual(target.readlink(), Path("..") / ".." / ".agents" / "skills" / "alpha")
-                self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "alpha skill\n")
-
-    def test_sync_bundled_public_skills_rejects_empty_source(self) -> None:
-        """内置公共技能为空时应阻断安装，避免静默漏装技能。"""
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            source = root / "bundled"
-            source.mkdir()
-
-            with self.assertRaises(OperationError) as error:
-                sync_bundled_public_skills(source, root / "home")
-
-            self.assertIn("内置公共技能目录不存在或不完整", str(error.exception))
+            self.assertNotIn("synced_skills", report.details)
 
     # ── install_from_remote_zip 测试 ──
 

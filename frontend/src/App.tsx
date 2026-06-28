@@ -630,31 +630,6 @@ export default function App() {
     }
   }, [selectedProject, addLog, addLogs, inspectProjectInner, loadOutdatedProjectsInner])
 
-  const handleSetupGitNexus = useCallback(async () => {
-    if (!selectedProject) return
-    const dirtyWarning = selectedProjectStatus?.dirty
-      ? '\n\n当前项目有未提交变更，GitNexus setup 可能产生额外 diff。'
-      : ''
-    const confirmed = window.confirm(`确认在当前项目执行 GitNexus Setup？${dirtyWarning}`)
-    if (!confirmed) {
-      addLog('info', '已取消 GitNexus Setup。')
-      return
-    }
-
-    setProjectBusy(true)
-    addLog('task', '== GitNexus Setup ==')
-    try {
-      const report = await api.setupGitNexusProject(selectedProject)
-      addLogs(...reportToLogs(report))
-      await inspectProjectInner(selectedProject, true)
-      await loadOutdatedProjectsInner()
-    } catch (err) {
-      addLog('error', `失败：GitNexus Setup - ${err}`)
-    } finally {
-      setProjectBusy(false)
-    }
-  }, [selectedProject, selectedProjectStatus, addLog, addLogs, inspectProjectInner, loadOutdatedProjectsInner])
-
   const handleOpenDir = useCallback(async () => {
     if (!selectedProject) return
     await api.openDirectory(selectedProject)
@@ -874,7 +849,6 @@ export default function App() {
                 onCheck={() => handleCheckProject()}
                 onInit={handleInitProject}
                 onUpdate={handleUpdateProject}
-                onSetupGitNexus={handleSetupGitNexus}
                 onOpenDir={handleOpenDir}
                 onOpenCursor={handleOpenCursor}
                 cursorStatus={cursorStatus}

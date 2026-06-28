@@ -27,7 +27,6 @@ from app.task_snapshot import read_task_snapshot, TrellisTaskItem, TrellisTaskSn
 Status = Literal["ok", "warning", "error", "unknown", "info"]
 SourceType = Literal["git", "zip_snapshot", "invalid", "missing"]
 APP_ROOT = Path(__file__).resolve().parents[1]
-BUNDLED_SKILLS_DIR = APP_ROOT / "resources" / "skills"
 
 
 @dataclass(frozen=True)
@@ -224,10 +223,6 @@ def project_update_command(bin_dir: Path = DEFAULT_BIN_DIR, migrate: bool = Fals
 
 def project_update_preview_command(bin_dir: Path = DEFAULT_BIN_DIR) -> list[str]:
     return [*project_update_command(bin_dir), "--dry-run"]
-
-
-def gitnexus_setup_command() -> list[str]:
-    return ["npx", "--yes", "gitnexus", "setup"]
 
 
 def requires_migrate_update(installed: str | None, latest: str | None) -> bool:
@@ -542,70 +537,6 @@ def is_valid_source_tree(repo_dir: Path) -> bool:
     return all(marker.exists() for marker in markers)
 
 
-def _remove_path_entry(path: Path) -> None:
-    if path.is_symlink() or path.is_file():
-        path.unlink()
-    elif path.exists():
-        shutil.rmtree(path)
-
-
-def _valid_bundled_skill_dirs(source_dir: Path) -> list[Path]:
-    if not source_dir.is_dir():
-        raise OperationError(f"内置公共技能目录不存在或不完整：{source_dir}")
-    skills = [
-        child
-        for child in sorted(source_dir.iterdir(), key=lambda item: item.name)
-        if child.is_dir() and (child / "SKILL.md").is_file()
-    ]
-    if not skills:
-        raise OperationError(f"内置公共技能目录不存在或不完整：{source_dir}")
-    return skills
-
-
-def sync_bundled_public_skills(
-    source_dir: Path = BUNDLED_SKILLS_DIR,
-    home_dir: Path | None = None,
-) -> dict[str, str]:
-    """把桌面端内置公共技能同步到用户全局技能目录。"""
-    source_dir = source_dir.expanduser().resolve()
-    skill_dirs = _valid_bundled_skill_dirs(source_dir)
-
-    home_dir = (home_dir or Path.home()).expanduser()
-    agents_skill_dir = home_dir / ".agents" / "skills"
-    codex_skill_dir = home_dir / ".codex" / "skills"
-    claude_skill_dir = home_dir / ".claude" / "skills"
-    for target_dir in [agents_skill_dir, codex_skill_dir, claude_skill_dir]:
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-    synced_names: list[str] = []
-    for skill_dir in skill_dirs:
-        skill_name = skill_dir.name
-        agents_target = agents_skill_dir / skill_name
-        _remove_path_entry(agents_target)
-        shutil.copytree(
-            skill_dir,
-            agents_target,
-            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store", ".vscode"),
-        )
-
-        # Codex 和 Claude 入口统一指向 ~/.agents/skills，保证用户本机只有一份权威技能副本。
-        symlink_target = Path("..") / ".." / ".agents" / "skills" / skill_name
-        for tool_dir in [codex_skill_dir, claude_skill_dir]:
-            tool_target = tool_dir / skill_name
-            _remove_path_entry(tool_target)
-            tool_target.symlink_to(symlink_target, target_is_directory=True)
-        synced_names.append(skill_name)
-
-    return {
-        "synced_skills": ",".join(synced_names),
-        "synced_skill_count": str(len(synced_names)),
-        "skill_source": str(source_dir),
-        "agents_skill_dir": str(agents_skill_dir),
-        "codex_skill_dir": str(codex_skill_dir),
-        "claude_skill_dir": str(claude_skill_dir),
-    }
-
-
 def _safe_extract_zip(zip_path: Path, extract_to: Path) -> Path:
     """安全解压 zip 到临时目录，拒绝路径遍历攻击，返回检测到的源码根目录。"""
     extract_to.mkdir(parents=True, exist_ok=True)
@@ -638,8 +569,6 @@ def install_from_zip(
     replace: bool = False,
     distribution_branch: str = DISTRIBUTION_BRANCH,
     runner: CommandRunner | None = None,
-    global_skill_home_dir: Path | None = None,
-    bundled_skill_source_dir: Path = BUNDLED_SKILLS_DIR,
 ) -> OperationReport:
     """从本地 zip 安装或重装 Trellis 工具源码。"""
     runner = runner or CommandRunner()
@@ -722,11 +651,6 @@ def install_from_zip(
             commands.append(result)
             _raise_if_failed(result, message, commands)
 
-        skill_details = sync_bundled_public_skills(
-            source_dir=bundled_skill_source_dir,
-            home_dir=global_skill_home_dir,
-        )
-
         # 成功：清理备份和临时目录
         if backup_dir and backup_dir.exists():
             shutil.rmtree(backup_dir)
@@ -741,7 +665,6 @@ def install_from_zip(
                 "zip": str(zip_path),
                 "source_type": "zip_snapshot",
                 "branch": distribution_branch,
-                **skill_details,
             },
         )
     finally:
@@ -865,8 +788,6 @@ def install_or_update_tool_repo(
     official_repo_url: str = OFFICIAL_REPO_URL,
     accelerated_repo_url: str = ACCELERATED_REPO_URL,
     distribution_branch: str = DISTRIBUTION_BRANCH,
-    global_skill_home_dir: Path | None = None,
-    bundled_skill_source_dir: Path = BUNDLED_SKILLS_DIR,
 ) -> OperationReport:
     runner = runner or CommandRunner()
     repo_dir = repo_dir.expanduser()
@@ -907,16 +828,12 @@ def install_or_update_tool_repo(
         result = runner.run(command, cwd=repo_dir, timeout=timeout)
         commands.append(result)
         _raise_if_failed(result, message, commands)
-    skill_details = sync_bundled_public_skills(
-        source_dir=bundled_skill_source_dir,
-        home_dir=global_skill_home_dir,
-    )
     return OperationReport(
         title="安装或更新 Trellis 工具仓库",
         ok=True,
         message="工具仓库已准备完成。",
         commands=commands,
-        details={"repo": str(repo_dir), "branch": distribution_branch, **skill_details},
+        details={"repo": str(repo_dir), "branch": distribution_branch},
     )
 
 
@@ -1165,34 +1082,6 @@ def update_project(
             "migrate": "true" if migrate else "false",
             "status": status_result.stdout.strip(),
             "diff_stat": diff_result.stdout.strip(),
-        },
-    )
-
-
-def setup_gitnexus_project(
-    project_dir: Path,
-    runner: CommandRunner | None = None,
-) -> OperationReport:
-    runner = runner or CommandRunner()
-    status = inspect_project(str(project_dir), runner)
-    if not status.is_git:
-        raise OperationError("目标项目必须是 git 仓库。")
-    if not status.has_trellis:
-        raise OperationError("目标项目尚未安装 Trellis，请先 init。")
-    commands: list[CommandResult] = []
-    _, dirty_output, dirty_result = git_status_short(status.path, runner)
-    commands.append(dirty_result)
-    setup_result = runner.run(gitnexus_setup_command(), cwd=status.path, timeout=300)
-    commands.append(setup_result)
-    _raise_if_failed(setup_result, "GitNexus setup 失败。", commands)
-    return OperationReport(
-        title="安装 GitNexus 集成",
-        ok=True,
-        message="GitNexus setup 已完成。",
-        commands=commands,
-        details={
-            "project": str(status.path),
-            "dirty_before": dirty_output,
         },
     )
 
@@ -1517,8 +1406,6 @@ def install_from_remote_zip(
     official_repo_url: str = OFFICIAL_REPO_URL,
     distribution_branch: str = DISTRIBUTION_BRANCH,
     runner: CommandRunner | None = None,
-    global_skill_home_dir: Path | None = None,
-    bundled_skill_source_dir: Path = BUNDLED_SKILLS_DIR,
 ) -> OperationReport:
     """从远端 GitHub 下载源码 zip 并安装/重装 Trellis 工具仓库。"""
     runner = runner or CommandRunner()
@@ -1552,8 +1439,6 @@ def install_from_remote_zip(
             replace=replace,
             distribution_branch=distribution_branch,
             runner=runner,
-            global_skill_home_dir=global_skill_home_dir,
-            bundled_skill_source_dir=bundled_skill_source_dir,
         )
         # 4. 包装返回结果，语义改为远端 zip
         return OperationReport(

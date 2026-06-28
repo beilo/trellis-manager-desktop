@@ -16,7 +16,6 @@ interface ProjectCardProps {
   onCheck: () => void
   onInit: () => void
   onUpdate: () => void
-  onSetupGitNexus: () => void
   onOpenDir: () => void
   onOpenCursor: () => Promise<void>
   cursorStatus: EnvironmentItem | null
@@ -33,7 +32,6 @@ export function ProjectCard({
   onCheck,
   onInit,
   onUpdate,
-  onSetupGitNexus,
   onOpenDir,
   onOpenCursor,
   cursorStatus,
@@ -101,15 +99,6 @@ export function ProjectCard({
           >
             {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {busy ? '处理中…' : 'Update'}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onSetupGitNexus}
-            disabled={busy || !projectPath || !canInitializedAction}
-          >
-            {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
-            {busy ? '处理中…' : 'GitNexus Setup'}
           </Button>
           <Button variant="outline" size="sm" onClick={onOpenDir} disabled={!projectPath}>
             <FolderOpen className="size-3" data-icon="inline-start" />
