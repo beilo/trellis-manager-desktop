@@ -45,6 +45,8 @@ EXCLUDED_DIRS = {
 
 EXCLUDED_FILES = {
     ".DS_Store",
+    # 子模块源码里的 .git 通常是文件而非目录，也不能进入发布 zip。
+    ".git",
 }
 
 

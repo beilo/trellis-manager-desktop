@@ -104,6 +104,9 @@ def write_trellis_source(root: Path) -> Path:
     (source / "node_modules" / "pkg" / "index.js").write_text("module.exports = {}\n", encoding="utf-8")
     (source / ".git").mkdir()
     (source / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    (source / "docs-site").mkdir()
+    # 子模块工作树常见 .git 文件，发布 zip 必须和 .git 目录一样排除。
+    (source / "docs-site" / ".git").write_text("gitdir: ../.git/modules/docs-site\n", encoding="utf-8")
     (source / "dist").mkdir()
     (source / "dist" / "bundle.js").write_text("", encoding="utf-8")
     return source
