@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "trellis-manager-desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "scripts": {
     "package:trellis-zip": "python3 scripts/package_local_trellis_zip.py",
     "package:trellis-zip:fast": "python3 scripts/package_local_trellis_zip.py --exclude-assets",
