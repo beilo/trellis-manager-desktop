@@ -3,3 +3,5 @@
 dist/
 __pycache__/
 *.pyc
+# 内置 Trellis 源码 zip 是发布生成产物，不提交进仓库
+resources/trellis-source.zip

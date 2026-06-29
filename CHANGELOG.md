@@ -4,6 +4,7 @@
 
 ### Added
 
+- **内置 Trellis 源码 zip 安装**：发布流程会从同级 `../Trellis` 生成 `resources/trellis-source.zip` 并打入 `.app`，工具链页新增弱网推荐的内置 zip 安装/重装入口；本地外部 zip 和远端 zip 入口保留，操作日志用 `embedded_zip_snapshot` / `local_zip_snapshot` / `remote_zip_snapshot` 区分来源。
 - **前端 UI 规范**：新增 `.trellis/spec/frontend/`，记录 Header segmented tabs 的选中态 hover 覆盖约定，避免 `Button ghost` 默认 hover 背景覆盖滑块选中态。
 
 ### Changed

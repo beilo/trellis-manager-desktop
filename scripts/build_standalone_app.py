@@ -28,9 +28,20 @@ REQUIREMENTS = APP_ROOT / "requirements.txt"
 ENTRYPOINT = APP_ROOT / "launcher.py"
 
 
+def ensure_embedded_zip() -> None:
+    # 发布流程已在调用前生成并校验内置 zip；此处仅做轻量存在性提示，不阻断开发态直接打包。
+    embedded = APP_RESOURCES / "trellis-source.zip"
+    if not embedded.exists():
+        print(
+            f"[warn] 未找到内置 Trellis 源码 zip：{embedded}；发布请通过 npm run release:package 生成。",
+            file=sys.stderr,
+        )
+
+
 def main() -> int:
     ensure_macos_arm64()
     ensure_frontend_dist()
+    ensure_embedded_zip()
     python = ensure_build_venv()
     install_build_dependencies(python)
     build_app(python)

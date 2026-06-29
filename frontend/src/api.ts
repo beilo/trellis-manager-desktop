@@ -28,6 +28,11 @@ declare global {
   }
 }
 
+export interface EmbeddedZipInfo {
+  exists: boolean
+  path: string
+}
+
 interface PywebviewAPI {
   get_config(): Promise<ManagerConfig>
   get_settings(): Promise<ManagerSettings>
@@ -46,6 +51,8 @@ interface PywebviewAPI {
   check_wrapper_commands(): Promise<ToolCommandStatus[]>
   install_or_update_tool_repo(path: string): Promise<OperationReport>
   install_from_zip?(zip_path: string, repo_path: string, replace?: boolean): Promise<OperationReport>
+  has_embedded_zip?(): Promise<EmbeddedZipInfo>
+  install_from_embedded_zip?(repo_path: string, replace?: boolean): Promise<OperationReport>
   get_github_branch_url?(): Promise<string | null>
   get_github_branch_zip_url?(): Promise<string | null>
   install_from_remote_zip?(repo_path: string, replace?: boolean): Promise<OperationReport>
@@ -240,6 +247,22 @@ export const api = {
       throw new Error('当前后端未提供本地 zip 安装接口。')
     }
     return bridge.install_from_zip(zipPath, repoPath, replace)
+  },
+
+  async hasEmbeddedZip(): Promise<EmbeddedZipInfo> {
+    const bridge = await getApi()
+    if (typeof bridge.has_embedded_zip !== 'function') {
+      return { exists: false, path: '' }
+    }
+    return bridge.has_embedded_zip()
+  },
+
+  async installFromEmbeddedZip(repoPath: string, replace: boolean = false): Promise<OperationReport> {
+    const bridge = await getApi()
+    if (typeof bridge.install_from_embedded_zip !== 'function') {
+      throw new Error('当前后端未提供内置 zip 安装接口。')
+    }
+    return bridge.install_from_embedded_zip(repoPath, replace)
   },
 
   async getGithubBranchUrl(): Promise<string | null> {

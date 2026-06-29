@@ -191,11 +191,34 @@ def create_version(version: str, runner: SubprocessRunner, root: Path = APP_ROOT
     return 0
 
 
+def generate_embedded_zip_for_release(root: Path = APP_ROOT, *, source: Path | str | None = None) -> Path:
+    # 发布前必须生成并校验内置 Trellis 源码 zip，确保 .app 离线安装链路可用。
+    try:
+        from package_local_trellis_zip import EmbeddedZipError, generate_embedded_zip, validate_embedded_zip
+    except ModuleNotFoundError:  # pragma: no cover - 作为 scripts 包导入时回退
+        from scripts.package_local_trellis_zip import (
+            EmbeddedZipError,
+            generate_embedded_zip,
+            validate_embedded_zip,
+        )
+    output_dir = root / "resources"
+    embedded_source = source if source is not None else root.parent / "Trellis"
+    try:
+        zip_path = generate_embedded_zip(embedded_source, output_dir=output_dir)
+        validate_embedded_zip(zip_path)
+    except EmbeddedZipError as exc:
+        raise ReleaseError(f"内置 Trellis 源码 zip 生成或校验失败：{exc}") from exc
+    return zip_path
+
+
 def package_release(*, clean: bool, runner: SubprocessRunner, root: Path = APP_ROOT) -> int:
     version = read_app_version(root)
     node_modules = root / "frontend" / "node_modules"
     if clean and node_modules.exists():
         shutil.rmtree(node_modules)
+
+    # 先生成并校验内置 zip，再构建前端和 .app，缺失/无效则 fail fast 阻断发布。
+    generate_embedded_zip_for_release(root)
 
     run_checked(runner, ["npm", "install"], cwd=root / "frontend", timeout=600)
     run_checked(runner, ["npx", "vite", "build"], cwd=root / "frontend", timeout=600)

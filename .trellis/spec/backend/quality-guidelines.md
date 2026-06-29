@@ -242,6 +242,84 @@ runner.run(project_update_command(bin_dir, migrate=migrate), cwd=project)
 - Frontend build 必须通过，证明 API wrapper、ProjectCard props 和 App handler 类型一致。
 - UI 状态矩阵改动后至少静态检查 `ProjectCard` 不再用 `version_outdated` 决定手动 Update 是否可点。
 
+## Scenario: 内置 Trellis 源码 zip 发布和安装
+
+### 1. Scope / Trigger
+
+- Trigger: 新增或修改桌面端内置 Trellis 源码 zip、zip 安装来源、发布前资源生成、或工具链页 zip 安装入口。
+- 适用范围：`scripts/package_local_trellis_zip.py`、`scripts/release.py`、`scripts/build_standalone_app.py`、`app/ops.py`、`app/api.py`、`frontend/src/api.ts`、`frontend/src/components/RepoCard.tsx`。
+- 内置 zip 是源码快照，不是依赖缓存；发布包可以离线拿到源码，但用户本机仍执行 `pnpm install` 和 `pnpm build`。
+
+### 2. Signatures
+
+- 打包命令：`npm run package:embedded-trellis-zip [-- --source <Trellis源码树>]`
+- 固定产物：`resources/trellis-source.zip`
+- 默认源码树：桌面端同级 `../Trellis`
+- 后端安装：`install_from_embedded_zip(zip_path, repo_dir, replace=False, distribution_branch=DISTRIBUTION_BRANCH, runner=None) -> OperationReport`
+- pywebview：`TrellisAPI.has_embedded_zip() -> {exists: boolean, path: string}`
+- pywebview：`TrellisAPI.install_from_embedded_zip(repo_path: str, replace: bool = False) -> dict`
+- 日志来源：`embedded_zip_snapshot`、`local_zip_snapshot`、`remote_zip_snapshot`；旧 `zip_snapshot` 仅作为前端兼容值。
+
+### 3. Contracts
+
+- 发布流程必须先生成并校验 `resources/trellis-source.zip`，再继续前端构建和 PyInstaller 打包。
+- `resources/trellis-source.zip` 必须被 `.gitignore` 忽略，不得作为源码提交。
+- zip 内容必须包含 Trellis 源码 marker：`package.json`、`pnpm-lock.yaml`、`packages/cli/package.json`、`packages/cli/bin/trellis.js`。
+- zip 内容不得包含 `.git`、`node_modules`、`dist`、`.cache`、`__pycache__` 等依赖、构建产物和缓存目录。
+- 内置、本地、远端 zip 安装必须最终复用 `install_from_zip(...)`；不得复制安全解压、防路径遍历、备份替换或构建逻辑。
+- 前端工具仓库卡片的 zip 入口顺序应是：内置推荐、本地外部、远端备用、浏览器分支链接。
+
+### 4. Validation & Error Matrix
+
+- 默认或指定源码树不存在 -> `EmbeddedZipError` / `ReleaseError`，阻断发布。
+- 源码树缺 marker -> `EmbeddedZipError`，不生成发布产物。
+- zip 内含被排除目录 -> `EmbeddedZipError`，不继续打包 `.app`。
+- 内置 zip 缺失时点击安装 -> 中文 `OperationError`，提示重新打包或运行内置 zip 打包命令。
+- 目标工具仓库存在且 `replace=False` -> 复用现有“确认重装”阻断。
+- 远端 zip 成功安装 -> `details.source_type="remote_zip_snapshot"` 且保留 `download_url`。
+
+### 5. Good/Base/Bad Cases
+
+- Good: `npm run release:package` 先从干净 `../Trellis` 生成 `resources/trellis-source.zip`，校验通过后 `.app` 资源目录包含该 zip。
+- Base: 开发态没有内置 zip，`has_embedded_zip()` 返回 `exists=false`，前端禁用内置入口但保留本地/远端入口。
+- Bad: 把 `resources/trellis-source.zip` 提交进 Git，导致仓库膨胀且发布产物混入源码历史。
+- Bad: `install_from_embedded_zip()` 自己解压 zip 或运行构建，绕过 `install_from_zip(...)` 的安全链路。
+- Bad: 仍把所有 zip 安装日志写成 `zip_snapshot`，导致操作日志无法区分内置、本地和远端来源。
+
+### 6. Tests Required
+
+- `tests/test_release.py`：生成内置 zip，断言 marker 存在且 `.git` / `node_modules` / `dist` 被排除。
+- `tests/test_release.py`：缺 marker 或坏源码树会抛 `EmbeddedZipError` / `ReleaseError`。
+- `tests/test_ops.py`：内置 zip 缺失错误、内置 zip 成功安装 `source_type=embedded_zip_snapshot`。
+- `tests/test_ops.py`：本地 zip `source_type=local_zip_snapshot`，远端 zip `source_type=remote_zip_snapshot` 且保留 `download_url`。
+- `tests/test_ui.py`：pywebview 桥接返回 `has_embedded_zip()`，并把资源路径传给后端安装函数。
+- 前端静态检查：`npm run lint -- --max-warnings=0` 和 `npx tsc -b --pretty false`。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+# 内置安装重新实现解压和构建，后续安全修复不会同步。
+def install_from_embedded_zip(zip_path, repo_dir):
+    zipfile.ZipFile(zip_path).extractall(repo_dir)
+    subprocess.run(["pnpm", "install"], cwd=repo_dir, check=True)
+```
+
+#### Correct
+
+```python
+# 内置来源只改入口和日志语义，安全安装链路保持一个。
+report = install_from_zip(
+    zip_path,
+    repo_dir,
+    replace=replace,
+    distribution_branch=distribution_branch,
+    runner=runner,
+    source_type="embedded_zip_snapshot",
+)
+```
+
 ## Scenario: 应用发包命令
 
 ### 1. Scope / Trigger

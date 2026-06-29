@@ -73,7 +73,7 @@ export interface EnvironmentItem {
   version: string | null
 }
 
-export type SourceType = 'git' | 'zip_snapshot' | 'invalid' | 'missing'
+export type SourceType = 'git' | 'zip_snapshot' | 'embedded_zip_snapshot' | 'local_zip_snapshot' | 'remote_zip_snapshot' | 'invalid' | 'missing'
 
 export interface RepoStatus {
   path: string

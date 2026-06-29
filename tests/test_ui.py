@@ -116,6 +116,44 @@ class TrellisManagerUiTest(unittest.TestCase):
                 },
             )
 
+    def test_embedded_zip_api_reports_resource_and_installs(self) -> None:
+        """内置 zip 桥接层只解析资源路径，安装业务交给 ops 薄封装。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            resources = root / "resources"
+            resources.mkdir()
+            embedded_zip = resources / "trellis-source.zip"
+            embedded_zip.write_bytes(b"PK\x05\x06" + b"\x00" * 18)
+            repo = root / "Trellis"
+            api = TrellisAPI()
+
+            def fake_resource(relative_path: str) -> Path:
+                self.assertEqual(relative_path, "resources/trellis-source.zip")
+                return embedded_zip
+
+            fake_report = Mock()
+            fake_report.to_log_entry.return_value = {
+                "title": "从内置 zip 安装 Trellis 工具仓库",
+                "ok": True,
+                "message": "ok",
+                "details": {"source_type": "embedded_zip_snapshot"},
+                "commands": [],
+                "created_at": "2026-06-29T00:00:00",
+            }
+
+            api._resource_file = fake_resource  # type: ignore[method-assign]
+            with patch("app.api.install_from_embedded_zip_op", return_value=fake_report) as install:
+                info = api.has_embedded_zip()
+                result = api.install_from_embedded_zip(str(repo), replace=True)
+
+            self.assertEqual(info, {"exists": True, "path": str(embedded_zip)})
+            self.assertEqual(result["details"]["source_type"], "embedded_zip_snapshot")
+            install.assert_called_once()
+            args, kwargs = install.call_args
+            self.assertEqual(args[0], embedded_zip)
+            self.assertEqual(args[1], repo)
+            self.assertTrue(kwargs["replace"])
+
     def test_project_apis_persist_list_and_selection(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.json"

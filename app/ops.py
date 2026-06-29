@@ -25,8 +25,9 @@ from app.runner import CommandResult, CommandRunner
 from app.task_snapshot import read_task_snapshot, TrellisTaskItem, TrellisTaskSnapshot
 
 Status = Literal["ok", "warning", "error", "unknown", "info"]
-SourceType = Literal["git", "zip_snapshot", "invalid", "missing"]
+SourceType = Literal["git", "zip_snapshot", "embedded_zip_snapshot", "local_zip_snapshot", "remote_zip_snapshot", "invalid", "missing"]
 APP_ROOT = Path(__file__).resolve().parents[1]
+EMBEDDED_TRELLIS_ZIP = APP_ROOT / "resources" / "trellis-source.zip"
 
 
 @dataclass(frozen=True)
@@ -569,6 +570,7 @@ def install_from_zip(
     replace: bool = False,
     distribution_branch: str = DISTRIBUTION_BRANCH,
     runner: CommandRunner | None = None,
+    source_type: str = "local_zip_snapshot",
 ) -> OperationReport:
     """从本地 zip 安装或重装 Trellis 工具源码。"""
     runner = runner or CommandRunner()
@@ -663,7 +665,7 @@ def install_from_zip(
             details={
                 "repo": str(repo_dir),
                 "zip": str(zip_path),
-                "source_type": "zip_snapshot",
+                "source_type": source_type,
                 "branch": distribution_branch,
             },
         )
@@ -1400,6 +1402,40 @@ def github_branch_zip_url(official_repo_url: str, distribution_branch: str) -> s
     return f"https://codeload.github.com/{parts[0]}/{parts[1]}/zip/refs/heads/{distribution_branch}"
 
 
+def install_from_embedded_zip(
+    zip_path: Path = EMBEDDED_TRELLIS_ZIP,
+    repo_dir: Path = DEFAULT_REPO_DIR,
+    replace: bool = False,
+    distribution_branch: str = DISTRIBUTION_BRANCH,
+    runner: CommandRunner | None = None,
+) -> OperationReport:
+    """从内置源码 zip 安装或重装 Trellis 工具仓库，复用本地 zip 安全链路。"""
+    zip_path = zip_path.expanduser()
+    if not zip_path.exists():
+        raise OperationError(f"内置 Trellis 源码 zip 不存在：{zip_path}。请先运行 npm run package:embedded-trellis-zip 或重新打包应用。")
+    report = install_from_zip(
+        zip_path,
+        repo_dir,
+        replace=replace,
+        distribution_branch=distribution_branch,
+        runner=runner,
+        source_type="embedded_zip_snapshot",
+    )
+    return OperationReport(
+        title="从内置 zip 安装 Trellis 工具仓库",
+        ok=report.ok,
+        message="工具仓库已从内置源码 zip 安装并构建完成。",
+        commands=report.commands,
+        details={
+            **report.details,
+            "repo": str(repo_dir.expanduser()),
+            "source_type": "embedded_zip_snapshot",
+            "branch": distribution_branch,
+            "zip": str(zip_path),
+        },
+    )
+
+
 def install_from_remote_zip(
     repo_dir: Path = DEFAULT_REPO_DIR,
     replace: bool = False,
@@ -1439,6 +1475,7 @@ def install_from_remote_zip(
             replace=replace,
             distribution_branch=distribution_branch,
             runner=runner,
+            source_type="remote_zip_snapshot",
         )
         # 4. 包装返回结果，语义改为远端 zip
         return OperationReport(
@@ -1449,7 +1486,7 @@ def install_from_remote_zip(
             details={
                 **report.details,
                 "repo": str(repo_dir),
-                "source_type": "zip_snapshot",
+                "source_type": "remote_zip_snapshot",
                 "branch": distribution_branch,
                 "download_url": download_url,
                 "zip": str(zip_path),

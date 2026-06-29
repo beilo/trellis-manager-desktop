@@ -41,6 +41,7 @@ from app.ops import (
     init_project,
     inspect_project,
     install_from_zip,
+    install_from_embedded_zip as install_from_embedded_zip_op,
     install_from_remote_zip,
     install_or_update_tool_repo,
     is_supported_macos,
@@ -302,6 +303,27 @@ class TrellisAPI:
         """从本地 zip 安装或重装 Trellis 工具源码。"""
         report = install_from_zip(
             Path(zip_path).expanduser(),
+            Path(repo_path).expanduser(),
+            replace=replace,
+            distribution_branch=self._settings["distribution_branch"],
+            runner=self._runner,
+            source_type="local_zip_snapshot",
+        )
+        return report.to_log_entry()
+
+    def has_embedded_zip(self) -> dict[str, Any]:
+        """返回内置源码 zip 可用性，供前端展示弱网推荐入口状态。"""
+        zip_path = self._resource_file("resources/trellis-source.zip")
+        return {
+            "exists": zip_path.exists() and zip_path.is_file(),
+            "path": str(zip_path),
+        }
+
+    def install_from_embedded_zip(self, repo_path: str, replace: bool = False) -> dict[str, Any]:
+        """从应用内置源码 zip 安装或重装 Trellis 工具仓库。"""
+        zip_path = self._resource_file("resources/trellis-source.zip")
+        report = install_from_embedded_zip_op(
+            zip_path,
             Path(repo_path).expanduser(),
             replace=replace,
             distribution_branch=self._settings["distribution_branch"],

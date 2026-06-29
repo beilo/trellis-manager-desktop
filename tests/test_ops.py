@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import shutil
 import stat
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import zipfile
 from pathlib import Path
 
@@ -40,6 +42,7 @@ from app.ops import (  # noqa: E402
     inspect_project,
     init_project,
     install_from_zip,
+    install_from_embedded_zip,
     install_from_remote_zip,
     install_or_update_tool_repo,
     list_outdated_projects,
@@ -190,6 +193,22 @@ class TrellisManagerOpsTest(unittest.TestCase):
         if with_prd:
             (task / "prd.md").write_text("# PRD\n", encoding="utf-8")
         return project, task
+
+    def _make_trellis_source_zip(self, root: Path, zip_name: str = "trellis.zip") -> Path:
+        source = root / "source"
+        (source / "packages" / "cli" / "bin").mkdir(parents=True)
+        (source / "packages" / "cli" / "bin" / "trellis.js").write_text("#!/usr/bin/env node\n", encoding="utf-8")
+        (source / "packages" / "cli" / "package.json").write_text(json.dumps({"name": "@mindfoldhq/trellis"}), encoding="utf-8")
+        (source / "packages" / "core").mkdir(parents=True)
+        (source / "packages" / "core" / "package.json").write_text(json.dumps({"name": "@mindfoldhq/trellis-core"}), encoding="utf-8")
+        (source / "package.json").write_text(json.dumps({"name": "trellis-root"}), encoding="utf-8")
+        (source / "pnpm-lock.yaml").write_text("", encoding="utf-8")
+
+        zip_path = root / zip_name
+        with zipfile.ZipFile(zip_path, "w") as archive:
+            for path in source.rglob("*"):
+                archive.write(path, path.relative_to(root))
+        return zip_path
 
     def test_project_commands_use_local_wrapper_and_force_update(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1199,6 +1218,7 @@ class TrellisManagerOpsTest(unittest.TestCase):
             )
 
             self.assertTrue(report.ok)
+            self.assertEqual(report.details["source_type"], "local_zip_snapshot")
             self.assertEqual(
                 [command.command for command in report.commands],
                 [
@@ -1207,6 +1227,32 @@ class TrellisManagerOpsTest(unittest.TestCase):
                 ],
             )
             self.assertNotIn("synced_skills", report.details)
+
+    def test_install_from_embedded_zip_missing_rejects(self) -> None:
+        """内置 zip 缺失时给出中文前置错误，不进入安装链路。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaises(OperationError) as error:
+                install_from_embedded_zip(root / "missing.zip", root / "Trellis")
+
+            self.assertIn("内置 Trellis 源码 zip 不存在", str(error.exception))
+
+    def test_install_from_embedded_zip_reports_embedded_source_type(self) -> None:
+        """内置 zip 复用本地安装链路，但日志 source_type 必须可区分来源。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            zip_path = self._make_trellis_source_zip(root)
+            runner = FakeRunner()
+
+            report = install_from_embedded_zip(
+                zip_path,
+                root / "Trellis",
+                runner=runner,  # type: ignore[arg-type]
+            )
+
+            self.assertTrue(report.ok)
+            self.assertEqual(report.details["source_type"], "embedded_zip_snapshot")
+            self.assertEqual(report.details["zip"], str(zip_path))
 
     # ── install_from_remote_zip 测试 ──
 
@@ -1265,6 +1311,30 @@ class TrellisManagerOpsTest(unittest.TestCase):
                 )
 
             self.assertIn("已存在", str(error.exception))
+
+    def test_install_from_remote_zip_reports_remote_source_type(self) -> None:
+        """远端 zip 安装成功后 details 区分 remote 来源并保留下载地址。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_zip = self._make_trellis_source_zip(root, "downloaded.zip")
+            repo = root / "Trellis"
+            runner = FakeRunner()
+
+            def fake_download(_url: str, dest: Path) -> None:
+                shutil.copy2(source_zip, dest)
+
+            with mock.patch("app.ops._download_zip", side_effect=fake_download):
+                report = install_from_remote_zip(
+                    repo,
+                    replace=False,
+                    official_repo_url="https://github.com/beilo/Trellis.git",
+                    distribution_branch="beilo/main",
+                    runner=runner,  # type: ignore[arg-type]
+                )
+
+            self.assertTrue(report.ok)
+            self.assertEqual(report.details["source_type"], "remote_zip_snapshot")
+            self.assertIn("download_url", report.details)
 
 
 if __name__ == "__main__":

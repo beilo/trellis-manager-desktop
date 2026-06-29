@@ -3,6 +3,9 @@
   "name": "trellis-manager-desktop",
   "version": "0.1.1",
   "scripts": {
+    "package:trellis-zip": "python3 scripts/package_local_trellis_zip.py",
+    "package:trellis-zip:fast": "python3 scripts/package_local_trellis_zip.py --exclude-assets",
+    "package:embedded-trellis-zip": "python3 scripts/package_local_trellis_zip.py --embedded",
     "release:version": "python3 scripts/release.py version",
     "release:package": "python3 scripts/release.py package",
     "release:publish": "python3 scripts/release.py publish"

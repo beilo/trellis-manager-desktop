@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { AppInput } from './AppInput'
 import { StatusBadge } from './StatusBadge'
 import { StepBadge, type StepStatus } from './StepBadge'
+import type { EmbeddedZipInfo } from '@/api'
 import type { RepoStatus } from '@/types'
 
 interface RepoCardProps {
@@ -15,11 +16,13 @@ interface RepoCardProps {
   onCheck: () => void
   onInstall: () => void
   onInstallFromZip: (zipPath: string, replace: boolean) => void
+  onInstallFromEmbeddedZip: (replace: boolean) => void
   onInstallFromRemoteZip: (replace: boolean) => void
   onCreateWrappers: () => void
   onPathChange: (path: string) => void
   githubBranchUrl: string | null
   githubBranchZipUrl: string | null
+  embeddedZipInfo: EmbeddedZipInfo | null
 }
 
 export function RepoCard({
@@ -30,13 +33,16 @@ export function RepoCard({
   onCheck,
   onInstall,
   onInstallFromZip,
+  onInstallFromEmbeddedZip,
   onInstallFromRemoteZip,
   onCreateWrappers,
   onPathChange,
   githubBranchUrl,
   githubBranchZipUrl,
+  embeddedZipInfo,
 }: RepoCardProps) {
   const [zipPath, setZipPath] = useState('')
+  const [embeddedZipBusy, setEmbeddedZipBusy] = useState(false)
   const [zipBusy, setZipBusy] = useState(false)
   const [remoteZipBusy, setRemoteZipBusy] = useState(false)
 
@@ -44,7 +50,7 @@ export function RepoCard({
   const sourceType = status?.source_type
 
   let stepStatus: StepStatus = 'idle'
-  if (busy || loading || zipBusy || remoteZipBusy) {
+  if (busy || loading || embeddedZipBusy || zipBusy || remoteZipBusy) {
     stepStatus = 'loading'
   } else if (status) {
     if (status.status === 'ok') stepStatus = 'ok'
@@ -69,7 +75,26 @@ export function RepoCard({
   }
 
   const isZipSnapshot = sourceType === 'zip_snapshot'
+    || sourceType === 'embedded_zip_snapshot'
+    || sourceType === 'local_zip_snapshot'
+    || sourceType === 'remote_zip_snapshot'
   const needsReinstall = status?.exists && !status?.is_git
+  // 检查仓库期间也禁用安装入口，避免状态刷新和安装写操作并发导致按钮判断失真。
+  const anyInstallBusy = loading || busy || embeddedZipBusy || zipBusy || remoteZipBusy
+  const embeddedZipAvailable = embeddedZipInfo?.exists === true
+
+  const handleEmbeddedZipInstall = async () => {
+    const replace = status?.exists === true
+    if (replace && !window.confirm('工具仓库已存在，确认用内置 zip 替换当前源码？')) {
+      return
+    }
+    setEmbeddedZipBusy(true)
+    try {
+      await onInstallFromEmbeddedZip(replace)
+    } finally {
+      setEmbeddedZipBusy(false)
+    }
+  }
 
   const handleZipInstall = async () => {
     if (!zipPath.trim()) return
@@ -109,7 +134,7 @@ export function RepoCard({
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-          <Button variant="outline" size="sm" onClick={onCheck} disabled={loading || busy || zipBusy || remoteZipBusy}>
+          <Button variant="outline" size="sm" onClick={onCheck} disabled={loading || anyInstallBusy}>
             {loading && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {loading ? '检查中…' : '检查仓库'}
           </Button>
@@ -117,13 +142,13 @@ export function RepoCard({
             variant="destructive"
             size="sm"
             onClick={onInstall}
-            disabled={busy || zipBusy || remoteZipBusy || isZipSnapshot}
+            disabled={anyInstallBusy || isZipSnapshot}
             title={isZipSnapshot ? '当前为 zip 快照安装，请使用下方 zip 重装更新' : undefined}
           >
             {busy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
             {busy ? '处理中…' : '下载 / 更新并构建'}
           </Button>
-          <Button variant="outline" size="sm" onClick={onCreateWrappers} disabled={busy || zipBusy || remoteZipBusy}>
+          <Button variant="outline" size="sm" onClick={onCreateWrappers} disabled={anyInstallBusy}>
             创建命令入口
           </Button>
         </div>
@@ -138,41 +163,82 @@ export function RepoCard({
           />
         </div>
 
-        {/* GitHub 分支链接 */}
-        {githubBranchUrl && (
+        {/* 内置 zip 安装区域：弱网时优先走随应用发布的源码快照，避免依赖 GitHub/codeload。 */}
+        <div className="flex flex-col gap-2 border rounded-lg p-3 bg-accent/40">
           <div className="flex items-center gap-2">
-            <a
-              href={githubBranchUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-            >
-              <ExternalLink className="size-3" />
-              打开分发分支
-            </a>
-            <span className="text-xs text-muted-foreground">
-              → 下载 zip 后通过下方选择本地安装
-            </span>
+            <FileArchive className="size-4 text-primary" />
+            <span className="text-xs font-semibold text-foreground">推荐：内置源码 zip 安装</span>
           </div>
-        )}
+          <p className="text-xs text-muted-foreground">
+            弱网首选。内置包只包含 Trellis 源码，不含依赖和构建产物；安装时会在本机继续执行依赖安装并构建。
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleEmbeddedZipInstall}
+              disabled={!embeddedZipAvailable || anyInstallBusy}
+              title={embeddedZipAvailable ? undefined : '当前应用未打入内置源码 zip，请重新打包或使用本地/远端 zip。'}
+            >
+              {embeddedZipBusy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
+              {embeddedZipBusy ? '内置安装中…' : needsReinstall ? '使用内置 zip 重装' : '使用内置 zip 安装'}
+            </Button>
+            {!embeddedZipAvailable && (
+              <span className="text-xs text-muted-foreground">内置 zip 不可用，可改用本地或远端 zip。</span>
+            )}
+          </div>
+        </div>
+
+        {/* 本地 zip 安装区域 */}
+        <div className="flex flex-col gap-2 border rounded-lg p-3 bg-accent/40">
+          <div className="flex items-center gap-2">
+            <FileArchive className="size-4 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground">本地源码 zip 安装</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            适合手动下载 zip 或使用自定义源码包；同样会在本机安装依赖并构建。
+          </p>
+          <div className="flex items-center gap-2">
+            <AppInput
+              value={zipPath}
+              onChange={(e) => setZipPath(e.target.value)}
+              placeholder="输入 zip 文件路径或点击选择…"
+              className="flex-1"
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleZipInstall}
+              disabled={!zipPath.trim() || anyInstallBusy}
+            >
+              {zipBusy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
+              {zipBusy ? '安装中…' : needsReinstall ? '重装' : '安装'}
+            </Button>
+          </div>
+          {isZipSnapshot && (
+            <p className="text-xs text-muted-foreground">
+              当前为源码 zip 快照，不能在线 pull；如需更新请选择新的 zip 或使用内置/远端 zip 重装。
+            </p>
+          )}
+        </div>
 
         {/* 远端 zip 安装区域 */}
         <div className="flex flex-col gap-2 border rounded-lg p-3 bg-accent/40">
           <div className="flex items-center gap-2">
             <CloudDownload className="size-4 text-muted-foreground" />
-            <span className="text-xs font-medium text-muted-foreground">远端源码 zip 安装</span>
+            <span className="text-xs font-medium text-muted-foreground">备用：远端源码 zip 安装</span>
           </div>
           {githubBranchZipUrl ? (
             <>
               <p className="text-xs text-muted-foreground">
-                从当前分发分支下载源码 zip 并安装，适合 Git clone/pull 不稳定时使用。
+                需要联网，从当前分发分支下载最新源码 zip；适合作为在线备用入口。
               </p>
               <div className="flex items-center gap-2">
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={handleRemoteZipInstall}
-                  disabled={remoteZipBusy || zipBusy || busy}
+                  disabled={anyInstallBusy}
                 >
                   {remoteZipBusy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
                   {remoteZipBusy
@@ -190,35 +256,23 @@ export function RepoCard({
           )}
         </div>
 
-        {/* 本地 zip 安装区域 */}
-        <div className="flex flex-col gap-2 border rounded-lg p-3 bg-accent/40">
+        {/* GitHub 分支链接 */}
+        {githubBranchUrl && (
           <div className="flex items-center gap-2">
-            <FileArchive className="size-4 text-muted-foreground" />
-            <span className="text-xs font-medium text-muted-foreground">本地源码 zip 安装</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <AppInput
-              value={zipPath}
-              onChange={(e) => setZipPath(e.target.value)}
-              placeholder="输入 zip 文件路径或点击选择…"
-              className="flex-1"
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleZipInstall}
-              disabled={!zipPath.trim() || zipBusy || busy || remoteZipBusy}
+            <a
+              href={githubBranchUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
             >
-              {zipBusy && <Loader2 className="size-3 animate-spin" data-icon="inline-start" />}
-              {zipBusy ? '安装中…' : needsReinstall ? '重装' : '安装'}
-            </Button>
+              <ExternalLink className="size-3" />
+              打开分发分支
+            </a>
+            <span className="text-xs text-muted-foreground">
+              → 浏览器手动下载 zip 后也可通过本地安装入口使用
+            </span>
           </div>
-          {isZipSnapshot && (
-            <p className="text-xs text-muted-foreground">
-              当前为本地源码快照，不能在线 pull；如需更新请选择新的 zip 并点击重装。
-            </p>
-          )}
-        </div>
+        )}
 
         <div className="flex items-center gap-3">
           <StatusBadge status={repoStatus} label={loading ? '检查中…' : undefined} />

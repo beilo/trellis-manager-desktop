@@ -12,12 +12,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from scripts.package_local_trellis_zip import (  # noqa: E402
+    EmbeddedZipError,
+    generate_embedded_zip,
+    validate_embedded_zip,
+)
 from scripts.release import (
     APP_NAME,
     CommandResult,
     ReleaseError,
     create_version,
     expected_zip_path,
+    generate_embedded_zip_for_release,
     publish_release,
     read_app_version,
     tag_for_version,
@@ -84,6 +90,23 @@ def write_package(root: Path, version: str = "0.1.0") -> None:
         json.dumps({"private": True, "name": "trellis-manager-desktop", "version": version}, indent=2) + "\n",
         encoding="utf-8",
     )
+
+
+def write_trellis_source(root: Path) -> Path:
+    source = root / "Trellis"
+    (source / "packages" / "cli" / "bin").mkdir(parents=True)
+    (source / "packages" / "cli" / "bin" / "trellis.js").write_text("#!/usr/bin/env node\n", encoding="utf-8")
+    (source / "packages" / "cli" / "package.json").write_text(json.dumps({"name": "@mindfoldhq/trellis"}), encoding="utf-8")
+    (source / "package.json").write_text(json.dumps({"name": "trellis-root"}), encoding="utf-8")
+    (source / "pnpm-lock.yaml").write_text("", encoding="utf-8")
+    # 排除目录用于证明发布 zip 不会把依赖、Git 元数据或构建产物打进应用。
+    (source / "node_modules" / "pkg").mkdir(parents=True)
+    (source / "node_modules" / "pkg" / "index.js").write_text("module.exports = {}\n", encoding="utf-8")
+    (source / ".git").mkdir()
+    (source / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    (source / "dist").mkdir()
+    (source / "dist" / "bundle.js").write_text("", encoding="utf-8")
+    return source
 
 
 def write_artifact(root: Path, version: str = "0.1.1") -> None:
@@ -155,6 +178,42 @@ class ReleaseScriptTest(unittest.TestCase):
             commands = [call[0] for call in runner.calls]
             self.assertIn(["gh", "release", "upload", "v0.1.1", str(expected_zip_path("0.1.1", root)), "--clobber"], commands)
             self.assertFalse(any(command[:3] == ["gh", "release", "delete"] for command in commands))
+
+    def test_embedded_zip_generation_excludes_build_and_git_dirs(self) -> None:
+        """发布内置 zip 只包含源码 marker，不包含依赖、Git 元数据和构建产物。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = write_trellis_source(root)
+            output_dir = root / "resources"
+
+            zip_path = generate_embedded_zip(source, output_dir=output_dir)
+            validate_embedded_zip(zip_path)
+
+            self.assertEqual(zip_path, output_dir / "trellis-source.zip")
+            import zipfile
+
+            with zipfile.ZipFile(zip_path) as archive:
+                names = archive.namelist()
+            self.assertIn("trellis-source/packages/cli/bin/trellis.js", names)
+            self.assertFalse(any("/node_modules/" in name or "/.git/" in name or "/dist/" in name for name in names))
+
+    def test_embedded_zip_generation_rejects_missing_markers(self) -> None:
+        """缺少源码 marker 时发布 zip 生成失败。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bad_source = root / "Trellis"
+            bad_source.mkdir()
+
+            with self.assertRaises(EmbeddedZipError):
+                generate_embedded_zip(bad_source, output_dir=root / "resources")
+
+    def test_release_embedded_zip_generation_wraps_errors(self) -> None:
+        """release.py 将底层 zip 错误包装成 ReleaseError，阻断发布。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            with self.assertRaises(ReleaseError):
+                generate_embedded_zip_for_release(root, source=root / "missing")
 
     def test_tag_for_version_adds_v_prefix(self) -> None:
         self.assertEqual(tag_for_version("0.1.1"), "v0.1.1")
