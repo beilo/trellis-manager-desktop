@@ -128,79 +128,6 @@ runner.run(["paseo", "run", "--json", "--provider", provider, "--cwd", cwd, prom
 
 命令必须是参数数组，并通过 fake runner 覆盖命令构造，避免用户需求文本被拼进 shell。
 
-## Scenario: 桌面端内置全局技能同步
-
-### 1. Scope / Trigger
-
-- Trigger: 工具仓库安装、更新或 zip 重装成功后，需要把桌面端内置公共技能覆盖到本机 AI 工具全局技能目录。
-- 适用范围：`app/ops.py` 中安装/构建成功后的本地文件同步，以及 `scripts/build_app.py` / `scripts/build_standalone_app.py` 的资源打包。
-
-### 2. Signatures
-
-- `sync_bundled_public_skills(source_dir: Path = BUNDLED_SKILLS_DIR, home_dir: Path | None = None) -> dict[str, str]`
-- 调用方：`install_or_update_tool_repo(...)`、`install_from_zip(...)`、`install_from_remote_zip(...)`
-- 内置资源路径：`resources/skills/<skill>/`
-- 本机权威源：`~/.agents/skills/<skill>`
-- 工具入口：`~/.codex/skills/<skill>`、`~/.claude/skills/<skill>`
-
-### 3. Contracts
-
-- `source_dir` 必须是目录，且至少包含一个带 `SKILL.md` 的一级子目录。
-- 只有包含 `SKILL.md` 的一级子目录视为可分发技能；无效子目录忽略。
-- `home_dir` 仅用于测试注入；产品路径默认 `Path.home()`。
-- 同步语义是强制覆盖：目标可以是旧目录、文件或历史 symlink；先移除目标入口，再写入新入口。
-- 每个技能先复制到 `~/.agents/skills/<skill>`，这是本机唯一权威副本。
-- `~/.codex/skills/<skill>` 和 `~/.claude/skills/<skill>` 必须创建为目录 symlink，目标为 `../../.agents/skills/<skill>`。
-- `OperationReport.details` 必须包含 `synced_skills`、`synced_skill_count`、`skill_source`、`agents_skill_dir`、`codex_skill_dir`、`claude_skill_dir`，方便操作日志取证。
-- 打包脚本必须把 `resources/` 放进应用根目录，保持运行时 `app/ops.py` 可通过 repo/app 根定位资源。
-
-### 4. Validation & Error Matrix
-
-- 内置公共技能根目录不存在 -> `OperationError("内置公共技能目录不存在或不完整：...")`
-- 内置公共技能根目录没有任何有效 `SKILL.md` -> 同上
-- 目标是 symlink -> `unlink()` symlink 本身，禁止跟随并覆盖 shared source
-- 目标是普通目录 -> `shutil.rmtree()` 后复制
-- 目标是普通文件 -> `unlink()` 后写入新目录或 symlink
-- 目标父目录不存在 -> 自动创建父目录
-
-### 5. Good/Base/Bad Cases
-
-- Good: 构建成功后，`.agents` 得到桌面端内置公共技能副本，Codex 和 Claude Code 全局目录得到指向 `.agents` 的 symlink。
-- Base: 同名目标已存在旧目录、旧文件或旧 symlink，安装后被强制替换为新语义。
-- Bad: 测试不注入 `home_dir`，导致单测写入真实 `~/.codex` 或 `~/.claude`。
-
-### 6. Tests Required
-
-- 单测覆盖 `sync_bundled_public_skills()` 扫描多个技能、忽略无效目录、覆盖旧目录/文件/symlink。
-- 单测必须断言 `~/.agents/skills/<skill>/SKILL.md` 是普通目录副本。
-- 单测必须断言 `~/.codex/skills/<skill>` 和 `~/.claude/skills/<skill>` 是 symlink，目标是 `../../.agents/skills/<skill>`。
-- 安装/zip 构建测试必须传 `global_skill_home_dir=tmp/home` 和临时 `bundled_skill_source_dir`，避免依赖真实用户目录或当前仓库资源状态。
-- 远端 zip 的 `replace=False` + 目标存在要前置阻断，避免先联网下载再失败。
-- 打包脚本变更后至少运行 `python3 -m py_compile ... scripts/*.py`。
-
-### 7. Wrong vs Correct
-
-#### Wrong
-
-```python
-# 单测写真实 home，污染开发机全局技能目录。
-install_from_zip(zip_path, repo_dir, runner=runner)
-```
-
-#### Correct
-
-```python
-install_from_zip(
-    zip_path,
-    repo_dir,
-    runner=runner,
-    global_skill_home_dir=temp_home,
-    bundled_skill_source_dir=temp_bundled_skills,
-)
-```
-
-同步逻辑必须从桌面端内置资源复制，不依赖 `/Users/am/ai-workspace/shared-skills/...` 这类开发机路径。
-
 ## Scenario: Trellis 工具分发线和项目迁移更新
 
 ### 1. Scope / Trigger
@@ -276,80 +203,44 @@ runner.run(project_update_command(bin_dir, migrate=migrate), cwd=project)
 
 迁移判断归后端命令层所有；前端只展示预览结果并收集用户确认，不重新实现版本比较。
 
-## Scenario: 桌面项目动作和外部集成安装
+## Scenario: 桌面项目动作
 
 ### 1. Scope / Trigger
 
-- Trigger: 修改业务项目卡上的 Init / Update / 外部集成按钮，或新增业务项目 pywebview 操作。
+- Trigger: 修改业务项目卡上的 Init / Update 按钮，或新增业务项目 pywebview 操作。
 - 适用范围：`app/ops.py` 项目操作函数、`app/api.py` pywebview 桥接、`app/runner.py` 命令白名单、`frontend/src/api.ts` 包装、`frontend/src/components/ProjectCard.tsx` 状态矩阵、`frontend/src/App.tsx` 操作 handler。
-- Trellis 项目生命周期动作和外部集成安装动作必须保持语义分离。
 
 ### 2. Signatures
 
 - `init_project(project_dir, platforms, developer_name, runner=None, bin_dir=DEFAULT_BIN_DIR) -> OperationReport`
 - `update_project(project_dir, allow_dirty=False, migrate=False, runner=None, bin_dir=DEFAULT_BIN_DIR, tool_repo_dir=DEFAULT_REPO_DIR) -> OperationReport`
-- `setup_gitnexus_project(project_dir, runner=None) -> OperationReport`
-- `gitnexus_setup_command() -> ["npx", "--yes", "gitnexus", "setup"]`
-- API bridge:
-  - `TrellisAPI.setup_gitnexus_project(path: str) -> dict`
-- Frontend wrappers:
-  - `api.setupGitNexusProject(path: string): Promise<OperationReport>`
 
 ### 3. Contracts
 
 - `Init` 只适用于 git 项目且项目内没有 `.trellis`；成功后必须继续执行 `tl update --force`。
 - `Update` 只要求 git 项目且项目内已有 `.trellis`；手动按钮不得依赖 `version_outdated`，最新版项目也允许手动执行 `tl update --force`。
-- `GitNexus Setup` 只要求 git 项目且项目内已有 `.trellis`；它属于外部集成安装动作，必须先由前端确认，再运行固定参数数组 `npx --yes gitnexus setup`。
-- dirty 项目默认阻断 `Update`，除非用户显式允许；dirty 项目不得阻断 `GitNexus Setup`，但确认文案必须提醒可能产生额外 diff。
-- `CommandRunner.ALLOWED_EXECUTABLES` 可以包含 `npx`，但 GitNexus 命令参数必须由后端固定构造，禁止从 UI 拼接 shell 字符串。
+- dirty 项目默认阻断 `Update`，除非用户显式允许。
 
 ### 4. Validation & Error Matrix
 
 - 非 git 项目执行任一项目写动作 -> `OperationError("目标项目必须是 git 仓库。")`
 - 已有 `.trellis` 执行 `Init` -> `OperationError("目标项目已经存在 .trellis，请使用 update。")`
-- 没有 `.trellis` 执行 `Update` / `GitNexus Setup` -> `OperationError("目标项目尚未安装 Trellis，请先 init。")`
+- 没有 `.trellis` 执行 `Update` -> `OperationError("目标项目尚未安装 Trellis，请先 init。")`
 - `developer_name` 为空执行 `Init` -> 中文 `OperationError` 提示先配置开发者名
 - `init_platforms` 为空执行 `Init` -> 中文 `OperationError` 提示至少选择一个平台
 - dirty 项目执行 `Update` 且 `allow_dirty=False` -> 阻断
-- dirty 项目执行 `GitNexus Setup` -> 不阻断，日志记录 `dirty_before`
 
 ### 5. Good/Base/Bad Cases
 
-- Good: 未初始化 git 项目只启用 `Init`；初始化后启用 `Update`、`GitNexus Setup`。
+- Good: 未初始化 git 项目只启用 `Init`；初始化后启用 `Update`。
 - Base: 已是最新版的 initialized 项目仍可点击 `Update`，然后走预览和确认弹窗。
-- Bad: 把 GitNexus setup 塞进 `Init`，导致首次接入 Trellis 时隐式安装外部集成。
-- Bad: 前端自己拼 `npx gitnexus setup` 字符串或让用户输入 GitNexus 命令参数。
 
 ### 6. Tests Required
 
 - `init_project` 仍拒绝已初始化项目，并断言 init 成功后命令序列包含 `tl update --force`。
 - `update_project` 覆盖 initialized 且 current-version 项目仍可运行普通 update。
-- `setup_gitnexus_project` 覆盖要求已初始化、dirty 不阻断、命令数组等于 `["npx", "--yes", "gitnexus", "setup"]`。
 - Frontend build 必须通过，证明 API wrapper、ProjectCard props 和 App handler 类型一致。
 - UI 状态矩阵改动后至少静态检查 `ProjectCard` 不再用 `version_outdated` 决定手动 Update 是否可点。
-
-### 7. Wrong vs Correct
-
-#### Wrong
-
-```python
-# 外部集成被隐式塞进 Trellis Init，用户无法区分副作用来源。
-runner.run(project_init_command(platforms, developer_name, bin_dir), cwd=project)
-runner.run(["npx", "--yes", "gitnexus", "setup"], cwd=project)
-runner.run(project_update_command(bin_dir), cwd=project)
-```
-
-#### Correct
-
-```python
-def setup_gitnexus_project(project_dir: Path, runner: CommandRunner | None = None) -> OperationReport:
-    status = inspect_project(str(project_dir), runner)
-    if not status.has_trellis:
-        raise OperationError("目标项目尚未安装 Trellis，请先 init。")
-    setup_result = runner.run(gitnexus_setup_command(), cwd=status.path, timeout=300)
-```
-
-外部集成安装必须是单独按钮、单独确认、单独日志；Trellis Init / Update 只处理 Trellis 生命周期语义。
 
 ## Scenario: 应用发包命令
 
