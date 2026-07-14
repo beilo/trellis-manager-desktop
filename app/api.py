@@ -7,7 +7,7 @@ import subprocess
 import sys
 import webbrowser
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import urlparse
 
 import webview
@@ -52,6 +52,7 @@ from app.ops import (
     update_project,
 )
 from app.task_snapshot import read_all_task_snapshots, read_task_snapshot
+from app.task_monitor import TaskMonitorError, TaskMonitorService
 from app.runner import CommandRunner
 
 if TYPE_CHECKING:
@@ -65,6 +66,7 @@ class TrellisAPI:
         self,
         config_file: Path | None = None,
         log_file: Path | None = None,
+        task_monitor: TaskMonitorService | None = None,
     ) -> None:
         self._window: webview.Window | None = None
         self._config_file = config_file
@@ -75,16 +77,23 @@ class TrellisAPI:
         self._runner = CommandRunner()
         # 文件读取集中交给 SafeFileReader，API 层只负责桥接和轻量参数约束。
         self._file_reader = SafeFileReader()
+        self._task_monitor = task_monitor or TaskMonitorService()
 
     def set_window(self, window: webview.Window) -> None:
         self._window = window
         file_watcher.set_notification_window(window)
-        file_watcher.start_project_watchers(self.get_projects())
 
     def shutdown(self) -> None:
         """关闭后端资源，窗口退出时停止 watcher。"""
 
         file_watcher.stop_project_watchers()
+        self._task_monitor.stop()
+
+    def start(self) -> None:
+        """启动窗口生命周期内的后台服务。"""
+
+        file_watcher.start_project_watchers(self.get_projects())
+        self._task_monitor.start()
 
     def _restart_project_watchers(self) -> None:
         file_watcher.start_project_watchers(self.get_projects())
@@ -568,3 +577,29 @@ class TrellisAPI:
             self._runner,
         )
         return report.to_log_entry()
+
+    # ── Trellis Loop 任务监听 ──
+
+    def _task_monitor_call(self, callback: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+        try:
+            return callback()
+        except TaskMonitorError as error:
+            return error.to_dict()
+
+    def list_task_monitor_runs(self, group: str, limit: int = 20, offset: int = 0) -> dict[str, Any]:
+        return self._task_monitor_call(lambda: self._task_monitor.list_runs(group, limit, offset))
+
+    def get_task_monitor_detail(self, channel: str) -> dict[str, Any]:
+        return self._task_monitor_call(lambda: self._task_monitor.get_detail(channel))
+
+    def search_task_monitor(self, query: str, limit: int = 20, offset: int = 0) -> dict[str, Any]:
+        return self._task_monitor_call(lambda: self._task_monitor.search(query, limit, offset))
+
+    def archive_task_monitor_run(self, channel: str) -> dict[str, Any]:
+        return self._task_monitor_call(lambda: self._task_monitor.archive(channel))
+
+    def refollow_task_monitor_run(self, channel: str) -> dict[str, Any]:
+        return self._task_monitor_call(lambda: self._task_monitor.refollow(channel))
+
+    def open_task_monitor_record(self, channel: str) -> dict[str, Any]:
+        return self._task_monitor_call(lambda: self._task_monitor.open_full_record(channel))

@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from app.api import TrellisAPI  # noqa: E402
 from app.config import ManagerConfig, save_config  # noqa: E402
 from app.runner import CommandResult  # noqa: E402
+from app.task_monitor import TaskMonitorError  # noqa: E402
 
 
 class FakeDialogWindow:
@@ -86,6 +87,15 @@ class FakeBatchUpdateRunner:
 
 
 class TrellisManagerUiTest(unittest.TestCase):
+    def test_task_monitor_bridge_returns_structured_input_error(self) -> None:
+        monitor = Mock()
+        monitor.list_runs.side_effect = TaskMonitorError("invalid_group", "group 无效")
+        api = TrellisAPI(task_monitor=monitor)
+
+        result = api.list_task_monitor_runs("bad")
+
+        self.assertEqual(result, {"ok": False, "error": {"code": "invalid_group", "message": "group 无效"}})
+
     def test_get_config_serializes_paths_for_frontend(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.json"

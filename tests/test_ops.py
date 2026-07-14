@@ -477,6 +477,11 @@ class TrellisManagerOpsTest(unittest.TestCase):
 
         self.assertEqual(result, ["npx", "--yes", "some-package"])
 
+    def test_command_runner_allows_osascript_for_terminal_launcher(self) -> None:
+        runner = CommandRunner()
+
+        self.assertIn("osascript", runner.allowed)
+
     def test_check_helm_status_reports_missing_cli(self) -> None:
         status = check_helm_status(HelmRunner(helm_installed=False))  # type: ignore[arg-type]
 

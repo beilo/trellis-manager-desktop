@@ -178,7 +178,75 @@ export interface ManagerConfig extends ManagerSettings {
   recent_projects: string[]
 }
 
-export type ActiveTab = 'toolchain' | 'projects' | 'kanban'
+export type TaskMonitorStatus =
+  | 'executing'
+  | 'waiting_worker'
+  | 'waiting_result'
+  | 'done'
+  | 'blocked'
+  | 'failed'
+  | 'partial'
+  | 'sent'
+  | 'unknown'
+
+export type TaskMonitorGroup = 'ongoing' | 'ended' | 'archived'
+
+export interface TaskMonitorEvent {
+  kind: string
+  by: string
+  text: string
+  seq: number | null
+  ts: string | null
+}
+
+export interface TaskMonitorItem {
+  channel: string
+  task_name: string
+  project_name: string
+  project_path: string
+  task_path: string
+  worker: string
+  provider: string
+  status: TaskMonitorStatus
+  status_label: string
+  group: TaskMonitorGroup
+  sent_at: string | null
+  completed_at: string | null
+  updated_at: string
+  archived_at: string | null
+  archive_due_on: string | null
+  archive_days_remaining: number | null
+  event_summary: string
+  record_conflict: boolean
+  source_available: boolean
+  channel_available: boolean
+  errors: string[]
+}
+
+export interface TaskMonitorDetail extends TaskMonitorItem {
+  source_path: string
+  handoff_path: string | null
+  recent_events: TaskMonitorEvent[]
+}
+
+export interface TaskMonitorPage<T extends TaskMonitorItem = TaskMonitorItem> {
+  items: T[]
+  total: number
+  next_offset: number | null
+}
+
+export interface TaskMonitorSearchItem extends TaskMonitorItem {
+  hit_source: string
+  snippet: string
+  rank: number
+}
+
+export interface TaskMonitorActionResult {
+  ok: boolean
+  message: string
+}
+
+export type ActiveTab = 'toolchain' | 'projects' | 'kanban' | 'monitor'
 
 export interface AppState {
   activeTab: ActiveTab

@@ -13,6 +13,7 @@ import { ProjectKnowledgeBrowser } from './components/ProjectKnowledgeBrowser'
 import { LogPanel } from './components/LogPanel'
 import { TaskManagerPanel } from './components/TaskManagerPanel'
 import { KanbanPanel } from './components/KanbanPanel'
+import { TaskMonitorPanel } from './components/TaskMonitorPanel'
 import { UpdatePreviewDialog } from './components/UpdatePreviewDialog'
 import { BatchUpdateDialog } from './components/BatchUpdateDialog'
 import { SettingsCard } from './components/SettingsCard'
@@ -75,7 +76,7 @@ function operationLogToEntries(entry: OperationLogEntry): LogEntry[] {
 
 function getInitialTab(): ActiveTab {
   const stored = window.localStorage.getItem(LAST_TAB_KEY)
-  return stored === 'toolchain' || stored === 'projects' || stored === 'kanban'
+  return stored === 'toolchain' || stored === 'projects' || stored === 'kanban' || stored === 'monitor'
     ? stored
     : 'projects'
 }
@@ -106,6 +107,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>(getInitialTab)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [batchUpdateOpen, setBatchUpdateOpen] = useState(false)
+  const [monitorSearchSignal, setMonitorSearchSignal] = useState(0)
 
   // 环境检查
   const [envItems, setEnvItems] = useState<EnvironmentItem[]>([])
@@ -475,6 +477,17 @@ export default function App() {
     setActiveTab(tab)
     window.localStorage.setItem(LAST_TAB_KEY, tab)
   }, [])
+
+  useEffect(() => {
+    const handleCommandK = (event: KeyboardEvent) => {
+      if (!(event.metaKey && event.key.toLowerCase() === 'k')) return
+      event.preventDefault()
+      handleTabChange('monitor')
+      setMonitorSearchSignal((value) => value + 1)
+    }
+    window.addEventListener('keydown', handleCommandK)
+    return () => window.removeEventListener('keydown', handleCommandK)
+  }, [handleTabChange])
 
   const handleOpenBatchUpdate = useCallback(() => {
     setBatchUpdateOpen(true)
@@ -901,6 +914,8 @@ export default function App() {
               </Tabs>
             </div>
           </div>
+        ) : activeTab === 'monitor' ? (
+          <TaskMonitorPanel openSearchSignal={monitorSearchSignal} />
         ) : (
           <KanbanPanel onNavigateToTask={handleNavigateToTask} />
         )}

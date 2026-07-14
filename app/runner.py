@@ -13,6 +13,7 @@ ALLOWED_EXECUTABLES = {
     "helm",
     "node",
     "npx",
+    "osascript",
     "pnpm",
     "tl",
     "trellis",

@@ -51,6 +51,7 @@ def main() -> None:
         background_color="#f8fafc",
     )
     api.set_window(window)
+    api.start()
     try:
         webview.start(debug=use_dev or frontend_dist is None)
     finally:

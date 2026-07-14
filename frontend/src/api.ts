@@ -14,6 +14,12 @@ import type {
   ProjectTasksBlock,
   RepoStatus,
   TaskDocumentKind,
+  TaskMonitorActionResult,
+  TaskMonitorDetail,
+  TaskMonitorGroup,
+  TaskMonitorItem,
+  TaskMonitorPage,
+  TaskMonitorSearchItem,
   TextFileResult,
   ToolCommandStatus,
   TrellisTaskSnapshot,
@@ -32,6 +38,13 @@ export interface EmbeddedZipInfo {
   exists: boolean
   path: string
 }
+
+interface TaskMonitorErrorResponse {
+  ok: false
+  error: { code: string; message: string }
+}
+
+type TaskMonitorBridgeResult<T> = T | TaskMonitorErrorResponse
 
 interface PywebviewAPI {
   get_config(): Promise<ManagerConfig>
@@ -85,6 +98,12 @@ interface PywebviewAPI {
   list_task_context_files(task_path: string): Promise<FileTreeResult>
   read_task_context_file(task_path: string, filename: string, limit?: number, offset?: number): Promise<TextFileResult | JsonlFileResult>
   read_task_document(task_path: string, doc: TaskDocumentKind): Promise<TextFileResult>
+  list_task_monitor_runs(group: TaskMonitorGroup, limit: number, offset: number): Promise<TaskMonitorBridgeResult<TaskMonitorPage>>
+  get_task_monitor_detail(channel: string): Promise<TaskMonitorBridgeResult<TaskMonitorDetail>>
+  search_task_monitor(query: string, limit: number, offset: number): Promise<TaskMonitorBridgeResult<TaskMonitorPage<TaskMonitorSearchItem>>>
+  archive_task_monitor_run(channel: string): Promise<TaskMonitorBridgeResult<TaskMonitorDetail>>
+  refollow_task_monitor_run(channel: string): Promise<TaskMonitorBridgeResult<TaskMonitorDetail>>
+  open_task_monitor_record(channel: string): Promise<TaskMonitorBridgeResult<TaskMonitorActionResult>>
 }
 
 
@@ -127,6 +146,13 @@ function emptyCounts(): Record<string, number> {
     done: 0,
     unknown: 0,
   }
+}
+
+function unwrapTaskMonitor<T>(result: TaskMonitorBridgeResult<T>): T {
+  if (typeof result === 'object' && result !== null && 'ok' in result && result.ok === false && 'error' in result) {
+    throw new Error(result.error.message)
+  }
+  return result as T
 }
 
 function projectName(path: string): string {
@@ -432,5 +458,29 @@ export const api = {
 
   async pushTaskToHelm(projectPath: string, taskPath: string): Promise<OperationReport> {
     return (await getApi()).push_task_to_helm(projectPath, taskPath)
+  },
+
+  async listTaskMonitorRuns(group: TaskMonitorGroup, limit: number = 20, offset: number = 0): Promise<TaskMonitorPage<TaskMonitorItem>> {
+    return unwrapTaskMonitor(await (await getApi()).list_task_monitor_runs(group, limit, offset))
+  },
+
+  async getTaskMonitorDetail(channel: string): Promise<TaskMonitorDetail> {
+    return unwrapTaskMonitor(await (await getApi()).get_task_monitor_detail(channel))
+  },
+
+  async searchTaskMonitor(query: string, limit: number = 20, offset: number = 0): Promise<TaskMonitorPage<TaskMonitorSearchItem>> {
+    return unwrapTaskMonitor(await (await getApi()).search_task_monitor(query, limit, offset))
+  },
+
+  async archiveTaskMonitorRun(channel: string): Promise<TaskMonitorDetail> {
+    return unwrapTaskMonitor(await (await getApi()).archive_task_monitor_run(channel))
+  },
+
+  async refollowTaskMonitorRun(channel: string): Promise<TaskMonitorDetail> {
+    return unwrapTaskMonitor(await (await getApi()).refollow_task_monitor_run(channel))
+  },
+
+  async openTaskMonitorRecord(channel: string): Promise<TaskMonitorActionResult> {
+    return unwrapTaskMonitor(await (await getApi()).open_task_monitor_record(channel))
   },
 }

@@ -1,7 +1,7 @@
 import { StatusBadge } from './StatusBadge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { BookOpen, FolderGit2, LayoutDashboard, Settings, Wrench } from 'lucide-react'
+import { BookOpen, FolderGit2, LayoutDashboard, RadioTower, Settings, Wrench } from 'lucide-react'
 import type { ActiveTab, PlatformInfo, Status } from '@/types'
 
 interface HeaderProps {
@@ -33,13 +33,13 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
       </div>
 
       <div className="flex flex-wrap items-center justify-start gap-2 pt-1 lg:justify-end">
-        <div className="relative flex w-[240px] h-9 items-center rounded-full bg-card/60 p-1 border border-border/60 select-none">
+        <div className="relative flex w-[376px] h-9 items-center rounded-full bg-card/60 p-1 border border-border/60 select-none">
           {/* Slider Background */}
           <div
             className="absolute top-1 bottom-1 rounded-full bg-background transition-all duration-200 ease-out shadow-[0_1px_3px_rgba(20,20,19,0.06)]"
             style={{
-              left: activeTab === 'kanban' ? '4px' : activeTab === 'toolchain' ? '82px' : '160px',
-              width: '76px',
+              left: activeTab === 'kanban' ? '4px' : activeTab === 'monitor' ? '96px' : activeTab === 'toolchain' ? '188px' : '280px',
+              width: '90px',
             }}
           />
           <Button
@@ -47,7 +47,7 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
             size="sm"
             onClick={() => onTabChange('kanban')}
             className={cn(
-              'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
+              'relative z-10 w-[90px] h-7 rounded-full text-xs transition-colors duration-150',
               activeTab === 'kanban' ? activeTabClass : inactiveTabClass,
             )}
           >
@@ -57,9 +57,21 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => onTabChange('monitor')}
+            className={cn(
+              'relative z-10 w-[90px] h-7 rounded-full text-xs transition-colors duration-150',
+              activeTab === 'monitor' ? activeTabClass : inactiveTabClass,
+            )}
+          >
+            <RadioTower data-icon="inline-start" />
+            任务监听
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => onTabChange('toolchain')}
             className={cn(
-              'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
+              'relative z-10 w-[90px] h-7 rounded-full text-xs transition-colors duration-150',
               activeTab === 'toolchain' ? activeTabClass : inactiveTabClass,
             )}
           >
@@ -71,7 +83,7 @@ export function Header({ platformInfo, readyStatus, activeTab, onTabChange, onOp
             size="sm"
             onClick={() => onTabChange('projects')}
             className={cn(
-              'relative z-10 w-[76px] h-7 rounded-full text-xs transition-colors duration-150',
+              'relative z-10 w-[90px] h-7 rounded-full text-xs transition-colors duration-150',
               activeTab === 'projects' ? activeTabClass : inactiveTabClass,
             )}
           >
