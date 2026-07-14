@@ -467,3 +467,36 @@ Added a task monitor action that copies a read-only diagnostic prompt from loade
 ### Next Steps
 
 - None - task complete
+
+
+## Session 14: 任务详情复制基础信息
+
+**Date**: 2026-07-14
+**Task**: 任务详情复制基础信息
+**Branch**: `main`
+
+### Summary
+
+在任务监听详情卡片增加 7 行基础信息复制，复用界面格式化结果；补齐剪贴板成功/失败处理、单元测试和前端 code-spec。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ad8e61b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
