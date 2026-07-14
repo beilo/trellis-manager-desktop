@@ -401,3 +401,36 @@ Split desktop project actions into Init, Configure, manual Update, and explicit 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: Trellis Loop 任务监听
+
+**Date**: 2026-07-14
+**Task**: Trellis Loop 任务监听
+**Branch**: `main`
+
+### Summary
+
+实现桌面端任务监听、搜索、详情、归档与终端定位；新增后端契约及完整回归验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `01039ba` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
