@@ -434,3 +434,36 @@ Split desktop project actions into Init, Configure, manual Update, and explicit 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 13: Copy task check prompt
+
+**Date**: 2026-07-14
+**Task**: Copy task check prompt
+**Branch**: `main`
+
+### Summary
+
+Added a task monitor action that copies a read-only diagnostic prompt from loaded ongoing tasks, with clipboard state handling, tests, and frontend spec coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `701f453` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
