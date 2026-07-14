@@ -395,3 +395,65 @@ try {
   setCopyError(`复制检查提示词失败：${String(error)}`)
 }
 ```
+
+---
+
+## Scenario: Task Monitor Detail Copies Displayed Basic Information
+
+### 1. Scope / Trigger
+
+- Trigger: Adding or changing the copy action inside the task-monitor detail information card.
+- Applies to the seven displayed rows in `DetailDrawer`: `Channel`, `Worker`, `项目`, `Task`, `派发时间`, `最近更新`, and `Handoff`.
+
+### 2. Signatures
+
+```ts
+getTaskMonitorDetailInfoRows(detail: TaskMonitorDetail): readonly TaskMonitorDetailInfoRow[]
+buildTaskMonitorDetailCopyText(detail: TaskMonitorDetail): string
+copyTaskMonitorDetailInfo(
+  detail: TaskMonitorDetail,
+  writeText: (text: string) => Promise<void>,
+): Promise<string>
+```
+
+### 3. Contracts
+
+- The card and clipboard text consume the same `getTaskMonitorDetailInfoRows` result so labels, order, fallbacks, and formatted times cannot drift.
+- Clipboard output contains exactly seven lines in display order. Each line uses a Chinese colon between its label and value.
+- Missing handoff paths render and copy as `尚无`; title, status, errors, and recent events are excluded.
+- Clipboard success changes the local button label to `已复制` for about two seconds. Clipboard failure is shown beside the button and keeps the drawer usable.
+
+### 4. Validation & Error Matrix
+
+- `handoff_path === null` -> render and copy `Handoff：尚无`.
+- Clipboard writer resolves -> return the generated text and show the temporary success label.
+- Clipboard writer rejects -> propagate the rejection to the UI caller; show a nearby error and do not show `已复制`.
+
+### 5. Good / Base / Bad Cases
+
+- Good: Updating a displayed label or formatter through the shared row builder changes both the card and copied output.
+- Base: A detail without a handoff still produces all seven lines and ends with `Handoff：尚无`.
+- Bad: The component renders one inline field array and separately maintains a copy template with duplicate labels or time formatting.
+- Bad: Copied text includes task title, lifecycle status, errors, or channel events.
+
+### 6. Tests Required
+
+- Unit test the exact seven-line text, label order, Chinese colons, displayed values, and handoff fallback.
+- Unit test that the clipboard writer receives and returns the generated text.
+- Unit test that clipboard rejection reaches the UI caller.
+- Run `npm run test`, `npm run lint`, and `npm run build` in `frontend/`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+await navigator.clipboard.writeText(`Channel：${detail.channel}\nTask：${detail.task_path}`)
+```
+
+#### Correct
+
+```ts
+const rows = getTaskMonitorDetailInfoRows(detail)
+await copyTaskMonitorDetailInfo(detail, (text) => navigator.clipboard.writeText(text))
+```

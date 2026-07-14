@@ -12,6 +12,11 @@ import {
 import { api } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  copyTaskMonitorDetailInfo,
+  formatTaskMonitorDateTime,
+  getTaskMonitorDetailInfoRows,
+} from '@/taskMonitorDetailCopy'
 import { copyTaskCheckPrompt } from '@/taskMonitorPrompt'
 import type {
   TaskMonitorDetail,
@@ -38,21 +43,9 @@ interface TaskMonitorPanelProps {
   openSearchSignal?: number
 }
 
-function formatDateTime(value: string | null): string {
-  if (!value) return '—'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
-}
-
 function formatDuration(sentAt: string | null, completedAt: string | null): string {
   if (!sentAt) return '派发时间未知'
-  if (completedAt) return `完成于 ${formatDateTime(completedAt)}`
+  if (completedAt) return `完成于 ${formatTaskMonitorDateTime(completedAt)}`
   const elapsed = Math.max(0, Date.now() - new Date(sentAt).getTime())
   const minutes = Math.floor(elapsed / 60_000)
   if (minutes < 60) return `已派发 ${minutes} 分钟`
@@ -97,7 +90,7 @@ function TaskCard({ item, onClick }: { item: TaskMonitorItem; onClick: () => voi
         <span className="truncate">Worker：{item.worker || '未知'}</span>
         <span className="truncate" title={item.channel}>Channel：{item.channel}</span>
         <span>{formatDuration(item.sent_at, item.status === 'done' ? item.completed_at : null)}</span>
-        <span>更新：{formatDateTime(item.updated_at)}</span>
+        <span>更新：{formatTaskMonitorDateTime(item.updated_at)}</span>
       </div>
       {item.archive_days_remaining !== null && (
         <p className="mt-2 text-xs text-muted-foreground">自动归档还剩 {item.archive_days_remaining} 天</p>
@@ -175,6 +168,35 @@ function DetailDrawer({
   onRefollow: () => void
   onOpenRecord: () => void
 }) {
+  const [copySucceeded, setCopySucceeded] = useState(false)
+  const [copyError, setCopyError] = useState<string | null>(null)
+  const copyResetTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (copyResetTimer.current !== null) window.clearTimeout(copyResetTimer.current)
+  }, [])
+
+  const handleCopy = useCallback(async () => {
+    if (!detail) return
+    if (copyResetTimer.current !== null) {
+      window.clearTimeout(copyResetTimer.current)
+      copyResetTimer.current = null
+    }
+    setCopySucceeded(false)
+    setCopyError(null)
+    try {
+      await copyTaskMonitorDetailInfo(detail, (text) => navigator.clipboard.writeText(text))
+      setCopySucceeded(true)
+      copyResetTimer.current = window.setTimeout(() => {
+        setCopySucceeded(false)
+        copyResetTimer.current = null
+      }, 2_000)
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : String(caught)
+      setCopyError(`复制基础信息失败：${message}`)
+    }
+  }, [detail])
+
   if (!detail && !loading) return null
   return (
     <div className="fixed inset-0 z-40 bg-black/20" onMouseDown={onClose}>
@@ -195,22 +217,22 @@ function DetailDrawer({
           <>
             <div className="flex-1 overflow-y-auto px-5 py-4">
               <div className="flex flex-wrap items-center gap-2"><StatusPill item={detail} /></div>
-              <dl className="mt-4 grid gap-3 rounded-xl bg-accent/35 p-4 text-xs">
-                {[
-                  ['Channel', detail.channel],
-                  ['Worker', `${detail.worker} / ${detail.provider}`],
-                  ['项目', detail.project_path],
-                  ['Task', detail.task_path],
-                  ['派发时间', formatDateTime(detail.sent_at)],
-                  ['最近更新', formatDateTime(detail.updated_at)],
-                  ['Handoff', detail.handoff_path ?? '尚无'],
-                ].map(([label, value]) => (
-                  <div key={label} className="grid grid-cols-[5rem_minmax(0,1fr)] gap-2">
-                    <dt className="text-muted-foreground">{label}</dt>
-                    <dd className="min-w-0 break-all text-foreground">{value}</dd>
-                  </div>
-                ))}
-              </dl>
+              <div className="mt-4 rounded-xl bg-accent/35 p-4 text-xs">
+                <dl className="grid gap-3">
+                  {getTaskMonitorDetailInfoRows(detail).map(([label, value]) => (
+                    <div key={label} className="grid grid-cols-[5rem_minmax(0,1fr)] gap-2">
+                      <dt className="text-muted-foreground">{label}</dt>
+                      <dd className="min-w-0 break-all text-foreground">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <div className="mt-3 flex flex-col items-end gap-1 border-t border-border/60 pt-3">
+                  <Button variant="outline" size="sm" onClick={() => void handleCopy()}>
+                    <Copy data-icon="inline-start" />{copySucceeded ? '已复制' : '复制'}
+                  </Button>
+                  {copyError && <p role="alert" className="max-w-full text-right text-red-700">{copyError}</p>}
+                </div>
+              </div>
               {detail.errors.length > 0 && (
                 <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-3 text-xs leading-5 text-orange-800">
                   {detail.errors.map((error) => <p key={error}>{error}</p>)}
@@ -224,7 +246,7 @@ function DetailDrawer({
                   <div key={`${event.seq ?? index}-${event.kind}`} className="rounded-lg border border-border/60 p-3 text-xs">
                     <div className="flex items-center justify-between gap-2 text-muted-foreground">
                       <span>{event.kind} · {event.by}</span>
-                      <span>{formatDateTime(event.ts)}</span>
+                      <span>{formatTaskMonitorDateTime(event.ts)}</span>
                     </div>
                     {event.text && <p className="mt-2 whitespace-pre-wrap break-words leading-5">{event.text}</p>}
                   </div>
@@ -558,7 +580,7 @@ export function TaskMonitorPanel({ openSearchSignal = 0 }: TaskMonitorPanelProps
         </div>
       )}
 
-      <DetailDrawer detail={detail} loading={detailLoading} onClose={() => setDetail(null)} onArchive={() => setArchiveConfirmOpen(true)} onRefollow={handleRefollow} onOpenRecord={handleOpenRecord} />
+      <DetailDrawer key={detail?.channel ?? 'loading'} detail={detail} loading={detailLoading} onClose={() => setDetail(null)} onArchive={() => setArchiveConfirmOpen(true)} onRefollow={handleRefollow} onOpenRecord={handleOpenRecord} />
       <ArchiveConfirmDialog open={archiveConfirmOpen} busy={archiveBusy} onCancel={() => setArchiveConfirmOpen(false)} onConfirm={() => void handleArchive()} />
       <SearchDialog
         open={searchOpen}
