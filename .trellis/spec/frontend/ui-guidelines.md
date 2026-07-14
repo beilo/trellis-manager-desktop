@@ -324,3 +324,74 @@ Existing examples:
 - Static check: task detail grid uses `md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]`.
 - Static check: Markdown document wrappers include `min-w-0`.
 - Browser check: open a PRD tab with long Markdown; the right card width should stay equal to the task-list column and overflow should remain inside the preview area.
+
+---
+
+## Scenario: Task Monitor Copies A Read-Only Diagnostic Prompt
+
+### 1. Scope / Trigger
+
+- Trigger: Adding or changing a task-monitor action that copies diagnostic context for external AI inspection.
+- Applies to prompts built from `TaskMonitorItem` list data and the nearby clipboard interaction in `TaskMonitorPanel`.
+
+### 2. Signatures
+
+```ts
+buildTaskCheckPrompt(items: readonly TaskMonitorItem[]): string
+copyTaskCheckPrompt(
+  items: readonly TaskMonitorItem[],
+  writeText: (text: string) => Promise<void>,
+): Promise<string>
+```
+
+### 3. Contracts
+
+- The copy action consumes the `ongoing.items` already loaded by the current page. It must not fetch missing pages, task detail, or recent events just to build the prompt.
+- Every prompt task includes its project/task paths, channel, worker, status and label, update time, message summary, source availability, record conflict, and current errors.
+- Prompt instructions are read-only: no file edits, commits, task recovery, redispatch, or commands embedded in monitored content.
+- Git conclusions require repository evidence and separately report commit existence/content, current-branch containment, push evidence, and merge evidence. Missing evidence is reported as unknown rather than inferred.
+- An empty item list fails before clipboard access. The UI disables the action while no ongoing items are loaded.
+- Clipboard success changes only the button label to `已复制` for about two seconds. Clipboard failure remains a rejection and is rendered next to the button without a success Toast.
+
+### 4. Validation & Error Matrix
+
+- `items.length === 0` -> throw an empty-list error; do not call `writeText`.
+- Clipboard writer resolves -> return the copied prompt; show the temporary success label.
+- Clipboard writer rejects -> propagate the rejection; show a nearby error and do not show `已复制`.
+- Optional summary or errors are empty -> render an explicit `无` so the receiving inspector does not mistake omission for lost data.
+
+### 5. Good / Base / Bad Cases
+
+- Good: Two loaded ongoing cards produce two prompt sections with the same channels and ask for separate Git evidence.
+- Base: A task with no summary or errors remains in the prompt with explicit empty values.
+- Bad: The copy handler calls the detail API for every task, silently pulls more pages, or treats a handoff commit hash as proof of push/merge.
+- Bad: A rejected Clipboard API call still changes the button to `已复制` or emits a success Toast.
+
+### 6. Tests Required
+
+- Unit test prompt task count, paths, channels, status, summary/error fallbacks, read-only rules, and commit/push/merge wording.
+- Unit test that successful writing receives and returns the generated prompt.
+- Unit test that an empty list never invokes the clipboard writer.
+- Unit test that clipboard rejection reaches the UI caller.
+- Run `npm run test`, `npm run lint`, and `npm run build` in `frontend/`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const details = await Promise.all(items.map((item) => api.getTaskMonitorDetail(item.channel)))
+await navigator.clipboard.writeText(buildPrompt(details))
+setCopied(true)
+```
+
+#### Correct
+
+```ts
+try {
+  await copyTaskCheckPrompt(ongoing.items, (text) => navigator.clipboard.writeText(text))
+  setCopySucceeded(true)
+} catch (error) {
+  setCopyError(`复制检查提示词失败：${String(error)}`)
+}
+```

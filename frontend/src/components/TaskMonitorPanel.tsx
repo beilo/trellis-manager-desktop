@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Archive,
   ChevronDown,
+  Copy,
   ExternalLink,
   Inbox,
   Search,
@@ -11,6 +12,7 @@ import {
 import { api } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { copyTaskCheckPrompt } from '@/taskMonitorPrompt'
 import type {
   TaskMonitorDetail,
   TaskMonitorItem,
@@ -367,7 +369,10 @@ export function TaskMonitorPanel({ openSearchSignal = 0 }: TaskMonitorPanelProps
   const [searchLoading, setSearchLoading] = useState(false)
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
   const [archiveBusy, setArchiveBusy] = useState(false)
+  const [copySucceeded, setCopySucceeded] = useState(false)
+  const [copyError, setCopyError] = useState<string | null>(null)
   const searchRequest = useRef(0)
+  const copyResetTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null)
 
   const loadLists = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -402,6 +407,10 @@ export function TaskMonitorPanel({ openSearchSignal = 0 }: TaskMonitorPanelProps
     const timer = window.setTimeout(() => setSearchOpen(true), 0)
     return () => window.clearTimeout(timer)
   }, [openSearchSignal])
+
+  useEffect(() => () => {
+    if (copyResetTimer.current !== null) window.clearTimeout(copyResetTimer.current)
+  }, [])
 
   useEffect(() => {
     if (!searchOpen) return
@@ -495,6 +504,26 @@ export function TaskMonitorPanel({ openSearchSignal = 0 }: TaskMonitorPanelProps
     }, 0)
   }, [selectTask])
 
+  const handleCopyCheckPrompt = useCallback(async () => {
+    if (copyResetTimer.current !== null) {
+      window.clearTimeout(copyResetTimer.current)
+      copyResetTimer.current = null
+    }
+    setCopySucceeded(false)
+    try {
+      await copyTaskCheckPrompt(ongoing.items, (text) => navigator.clipboard.writeText(text))
+      setCopyError(null)
+      setCopySucceeded(true)
+      copyResetTimer.current = window.setTimeout(() => {
+        setCopySucceeded(false)
+        copyResetTimer.current = null
+      }, 2_000)
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : String(caught)
+      setCopyError(`复制检查提示词失败：${message}`)
+    }
+  }, [ongoing.items])
+
   return (
     <div className="my-1 flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3 px-1">
@@ -502,7 +531,20 @@ export function TaskMonitorPanel({ openSearchSignal = 0 }: TaskMonitorPanelProps
           <h2 className="flex items-center gap-2 text-lg font-serif font-normal tracking-tight"><Inbox className="size-4 text-primary" />任务监听</h2>
           <p className="mt-1 text-xs text-muted-foreground">仅聚合 Trellis Loop 派发记录；桌面端归档不修改源任务。</p>
         </div>
-        <Button variant="outline" onClick={() => setSearchOpen(true)}><Search data-icon="inline-start" />搜索 <kbd className="ml-1 text-[10px]">⌘K</kbd></Button>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="outline"
+              disabled={loading || ongoing.items.length === 0}
+              title={ongoing.items.length === 0 ? '当前页面没有已加载的进行中任务' : undefined}
+              onClick={() => void handleCopyCheckPrompt()}
+            >
+              <Copy data-icon="inline-start" />{copySucceeded ? '已复制' : '复制检查提示词'}
+            </Button>
+            <Button variant="outline" onClick={() => setSearchOpen(true)}><Search data-icon="inline-start" />搜索 <kbd className="ml-1 text-[10px]">⌘K</kbd></Button>
+          </div>
+          {copyError && <p role="alert" className="max-w-md text-right text-xs text-red-700">{copyError}</p>}
+        </div>
       </div>
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
