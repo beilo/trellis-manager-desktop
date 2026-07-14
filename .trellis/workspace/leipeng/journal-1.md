@@ -500,3 +500,36 @@ Added a task monitor action that copies a read-only diagnostic prompt from loade
 ### Next Steps
 
 - None - task complete
+
+
+## Session 15: 过滤任务详情工具消息
+
+**Date**: 2026-07-14
+**Task**: 过滤任务详情工具消息
+**Branch**: `main`
+
+### Summary
+
+任务监听详情 recent_events 只保留过滤后的最后 20 条 message 事件；补充混合事件、先过滤后截取和无消息回归测试，完整质量门通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `49bd146` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

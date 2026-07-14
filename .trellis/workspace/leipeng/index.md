@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 14
+- **Total Sessions**: 15
 - **Last Active**: 2026-07-14
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~502 | Active |
+| `journal-1.md` | ~535 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 15 | 2026-07-14 | 过滤任务详情工具消息 | `49bd146` | `main` |
 | 14 | 2026-07-14 | 任务详情复制基础信息 | `ad8e61b` | `main` |
 | 13 | 2026-07-14 | Copy task check prompt | `701f453` | `main` |
 | 12 | 2026-07-14 | Trellis Loop 任务监听 | `01039ba` | `main` |
