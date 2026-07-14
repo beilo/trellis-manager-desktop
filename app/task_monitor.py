@@ -720,7 +720,7 @@ class TaskMonitorService:
         messages.sort(key=lambda item: item[0])
         summary = re.sub(r"\s+", " ", messages[-1][1]).strip()[:240] if messages else ""
         return {
-            "recent": events[-20:],
+            "recent": [event for event in events if event["kind"] == "message"][-20:],
             "messages": "\n\n".join(message for _, message in messages),
             "summary": summary,
             "last_timestamp": last_timestamp,

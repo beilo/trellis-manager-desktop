@@ -205,28 +205,77 @@ class TaskMonitorTest(unittest.TestCase):
         parse_handoff.assert_not_called()
         parse_task.assert_not_called()
 
-    def test_recent_events_keep_raw_progress_entries(self) -> None:
+    def test_recent_events_only_include_messages_from_mixed_events(self) -> None:
         _, _, events = self._fixture()
         rows = [
             {"kind": "turn_started", "by": "worker-1", "seq": 1, "ts": "2026-07-14T08:20:09Z"},
-            *[
-                {
-                    "kind": "progress",
-                    "by": "worker-1",
-                    "detail": {"tool": "shell", "status": "inProgress", "cmd": f"command-{index}"},
-                    "seq": index + 2,
-                    "ts": "2026-07-14T08:20:10Z",
-                }
-                for index in range(25)
-            ],
+            {
+                "kind": "progress",
+                "by": "worker-1",
+                "detail": {"tool": "shell", "status": "inProgress", "cmd": "command-1"},
+                "seq": 2,
+                "ts": "2026-07-14T08:20:10Z",
+            },
+            {"kind": "message", "by": "worker-1", "text": "第一条消息", "seq": 3, "ts": "2026-07-14T08:20:11Z"},
+            {"kind": "done", "by": "worker-1", "seq": 4, "ts": "2026-07-14T08:20:12Z"},
+            {"kind": "error", "by": "worker-1", "reason": "失败详情", "seq": 5, "ts": "2026-07-14T08:20:13Z"},
+            {"kind": "killed", "by": "supervisor", "seq": 6, "ts": "2026-07-14T08:20:14Z"},
+            {"kind": "message", "by": "main", "text": "第二条消息", "seq": 7, "ts": "2026-07-14T08:20:15Z"},
         ]
         self._write_events(events, rows)
         self.service.scan_once()
 
         recent = self.service.get_detail("trellis-test-20260714")["recent_events"]
+        self.assertEqual([event["kind"] for event in recent], ["message", "message"])
+        self.assertEqual([event["text"] for event in recent], ["第一条消息", "第二条消息"])
+        self.assertEqual([event["seq"] for event in recent], [3, 7])
+
+    def test_recent_events_filter_before_taking_last_twenty(self) -> None:
+        _, _, events = self._fixture()
+        rows: list[dict[str, object]] = []
+        for index in range(25):
+            rows.extend(
+                [
+                    {
+                        "kind": "message",
+                        "by": "worker-1",
+                        "text": f"message-{index}",
+                        "seq": index * 2 + 1,
+                        "ts": "2026-07-14T08:20:10Z",
+                    },
+                    {
+                        "kind": "progress",
+                        "by": "worker-1",
+                        "detail": {"tool": "shell", "status": "inProgress", "cmd": f"command-{index}"},
+                        "seq": index * 2 + 2,
+                        "ts": "2026-07-14T08:20:10Z",
+                    },
+                ]
+            )
+        self._write_events(events, rows)
+        self.service.scan_once()
+
+        recent = self.service.get_detail("trellis-test-20260714")["recent_events"]
         self.assertEqual(len(recent), 20)
-        self.assertTrue(all(event["kind"] == "progress" for event in recent))
-        self.assertIn("command-24", recent[-1]["text"])
+        self.assertEqual(recent[0]["text"], "message-5")
+        self.assertEqual(recent[-1]["text"], "message-24")
+        self.assertTrue(all(event["kind"] == "message" for event in recent))
+
+    def test_recent_events_are_empty_without_messages(self) -> None:
+        _, _, events = self._fixture()
+        self._write_events(
+            events,
+            [
+                {"kind": "progress", "by": "worker-1", "seq": 1, "ts": "2026-07-14T08:20:09Z"},
+                {"kind": "error", "by": "worker-1", "reason": "失败详情", "seq": 2, "ts": "2026-07-14T08:20:10Z"},
+                {"kind": "killed", "by": "supervisor", "seq": 3, "ts": "2026-07-14T08:20:11Z"},
+            ],
+        )
+        self.service.scan_once()
+
+        detail = self.service.get_detail("trellis-test-20260714")
+        self.assertEqual(detail["recent_events"], [])
+        self.assertEqual(detail["status"], "waiting_result")
 
     def test_archive_refollow_and_search_include_archived_content(self) -> None:
         _, handoff, events = self._fixture()
