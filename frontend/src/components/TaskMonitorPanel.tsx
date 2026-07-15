@@ -92,9 +92,6 @@ function TaskCard({ item, onClick }: { item: TaskMonitorItem; onClick: () => voi
         <span>{formatDuration(item.sent_at, item.status === 'done' ? item.completed_at : null)}</span>
         <span>更新：{formatTaskMonitorDateTime(item.updated_at)}</span>
       </div>
-      {item.archive_days_remaining !== null && (
-        <p className="mt-2 text-xs text-muted-foreground">自动归档还剩 {item.archive_days_remaining} 天</p>
-      )}
       {item.event_summary && (
         <p className="mt-3 line-clamp-2 rounded-lg bg-accent/40 px-3 py-2 text-xs leading-5 text-foreground/80">
           {item.event_summary}
@@ -385,6 +382,9 @@ export function TaskMonitorPanel({ openSearchSignal = 0 }: TaskMonitorPanelProps
   const [error, setError] = useState<string | null>(null)
   const [detail, setDetail] = useState<TaskMonitorDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null)
+  const detailRequestSeq = useRef(0)
+  const listRequestInFlight = useRef<Promise<void> | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [searchPage, setSearchPage] = useState<TaskMonitorPage<TaskMonitorSearchItem>>(emptyPage)
@@ -396,33 +396,37 @@ export function TaskMonitorPanel({ openSearchSignal = 0 }: TaskMonitorPanelProps
   const searchRequest = useRef(0)
   const copyResetTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null)
 
-  const loadLists = useCallback(async (silent = false) => {
+  const loadLists = useCallback(async function loadTaskMonitorLists(silent = false, refreshAfterInFlight = false): Promise<void> {
+    const pending = listRequestInFlight.current
+    if (pending) {
+      if (refreshAfterInFlight) {
+        await pending
+        await loadTaskMonitorLists(silent)
+      }
+      return
+    }
     if (!silent) setLoading(true)
-    try {
-      const [ongoingPage, endedPage, archivedPage] = await Promise.all([
-        api.listTaskMonitorRuns('ongoing', 10_000, 0),
-        api.listTaskMonitorRuns('ended', endedLimit, 0),
-        api.listTaskMonitorRuns('archived', archivedLimit, 0),
-      ])
-      setOngoing(ongoingPage)
-      setEnded(endedPage)
-      setArchived(archivedPage)
-      setError(null)
-    } catch (caught) {
-      setError(`读取任务监听数据失败：${caught}`)
-    } finally {
-      if (!silent) setLoading(false)
-    }
+    const request = (async () => {
+      try {
+        const [ongoingPage, endedPage, archivedPage] = await Promise.all([
+          api.listTaskMonitorRuns('ongoing', 10_000, 0),
+          api.listTaskMonitorRuns('ended', endedLimit, 0),
+          api.listTaskMonitorRuns('archived', archivedLimit, 0),
+        ])
+        setOngoing(ongoingPage)
+        setEnded(endedPage)
+        setArchived(archivedPage)
+        setError(null)
+      } catch (caught) {
+        setError(`读取任务监听数据失败：${caught}`)
+      } finally {
+        listRequestInFlight.current = null
+        if (!silent) setLoading(false)
+      }
+    })()
+    listRequestInFlight.current = request
+    await request
   }, [archivedLimit, endedLimit])
-
-  useEffect(() => {
-    const initial = window.setTimeout(() => void loadLists(), 0)
-    const timer = window.setInterval(() => void loadLists(true), 5_000)
-    return () => {
-      window.clearTimeout(initial)
-      window.clearInterval(timer)
-    }
-  }, [loadLists])
 
   useEffect(() => {
     if (openSearchSignal <= 0) return
@@ -458,20 +462,57 @@ export function TaskMonitorPanel({ openSearchSignal = 0 }: TaskMonitorPanelProps
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [searchOpen])
 
-  const selectTask = useCallback(async (item: TaskMonitorItem) => {
-    setDetailLoading(true)
-    setDetail(null)
+  const refreshDetail = useCallback(async (channel: string) => {
+    const seq = ++detailRequestSeq.current
     try {
-      setDetail(await api.getTaskMonitorDetail(item.channel))
-    } finally {
-      setDetailLoading(false)
+      const fresh = await api.getTaskMonitorDetail(channel)
+      if (seq === detailRequestSeq.current) {
+        setDetail(fresh)
+      }
+    } catch {
+      // 后台刷新失败不覆盖当前详情
     }
   }, [])
 
+  useEffect(() => {
+    const initial = window.setTimeout(() => void loadLists(), 0)
+    const timer = window.setInterval(() => {
+      void loadLists(true)
+      if (selectedChannel) void refreshDetail(selectedChannel)
+    }, 5_000)
+    return () => {
+      window.clearTimeout(initial)
+      window.clearInterval(timer)
+    }
+  }, [loadLists, refreshDetail, selectedChannel])
+
+  const selectTask = useCallback(async (item: TaskMonitorItem) => {
+    setSelectedChannel(item.channel)
+    setDetailLoading(true)
+    setDetail(null)
+    const seq = ++detailRequestSeq.current
+    try {
+      const fresh = await api.getTaskMonitorDetail(item.channel)
+      if (seq === detailRequestSeq.current) {
+        setDetail(fresh)
+        setDetailLoading(false)
+      }
+    } catch {
+      if (seq === detailRequestSeq.current) setDetailLoading(false)
+    }
+  }, [])
+
+  const closeDetail = useCallback(() => {
+    detailRequestSeq.current += 1
+    setDetail(null)
+    setSelectedChannel(null)
+    setDetailLoading(false)
+  }, [])
+
   const refreshDetailAndLists = useCallback(async (channel: string) => {
-    await loadLists(true)
-    setDetail(await api.getTaskMonitorDetail(channel))
-  }, [loadLists])
+    await loadLists(true, true)
+    await refreshDetail(channel)
+  }, [loadLists, refreshDetail])
 
   const handleArchive = useCallback(async () => {
     if (!detail) return
@@ -580,7 +621,7 @@ export function TaskMonitorPanel({ openSearchSignal = 0 }: TaskMonitorPanelProps
         </div>
       )}
 
-      <DetailDrawer key={detail?.channel ?? 'loading'} detail={detail} loading={detailLoading} onClose={() => setDetail(null)} onArchive={() => setArchiveConfirmOpen(true)} onRefollow={handleRefollow} onOpenRecord={handleOpenRecord} />
+      <DetailDrawer key={detail?.channel ?? 'loading'} detail={detail} loading={detailLoading} onClose={closeDetail} onArchive={() => setArchiveConfirmOpen(true)} onRefollow={handleRefollow} onOpenRecord={handleOpenRecord} />
       <ArchiveConfirmDialog open={archiveConfirmOpen} busy={archiveBusy} onCancel={() => setArchiveConfirmOpen(false)} onConfirm={() => void handleArchive()} />
       <SearchDialog
         open={searchOpen}

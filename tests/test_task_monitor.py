@@ -89,7 +89,20 @@ class TaskMonitorTest(unittest.TestCase):
     def _write_events(self, path: Path, events: list[dict[str, object]]) -> None:
         path.write_text("\n".join(json.dumps(event, ensure_ascii=False) for event in events) + "\n", encoding="utf-8")
 
+    def _task_path(self) -> Path:
+        return self.root / "project" / ".trellis" / "tasks" / "07-14-test"
+
+    def _stop_worker(self, events: Path) -> None:
+        self._write_events(
+            events,
+            [
+                {"kind": "turn_started", "by": "worker-1", "seq": 2, "ts": "2026-07-14T08:20:09Z"},
+                {"kind": "killed", "by": "supervisor", "seq": 4, "ts": "2026-07-14T08:25:00Z"},
+            ],
+        )
+
     def test_default_database_path_uses_macos_application_support(self) -> None:
+        self.assertEqual(self.service._scan_interval, 60.0)
         with patch("app.task_monitor.platform.system", return_value="Darwin"):
             self.assertEqual(
                 default_database_path(),
@@ -122,7 +135,7 @@ class TaskMonitorTest(unittest.TestCase):
         ended = self.service.list_runs("ended")
         self.assertEqual(ended["total"], 1)
         self.assertEqual(ended["items"][0]["status"], "done")
-        self.assertEqual(ended["items"][0]["archive_due_on"], "2026-08-13")
+        self.assertIsNone(ended["items"][0]["archive_due_on"])
 
         run.write_text("corrupted after a successful scan", encoding="utf-8")
         self.service.scan_once()
@@ -188,6 +201,67 @@ class TaskMonitorTest(unittest.TestCase):
         self.service.scan_once()
         # handoff 删除后仍使用已缓存终态，避免任务从异常状态倒退。
         self.assertEqual(self.service.get_detail("trellis-test-20260714")["status"], "blocked")
+
+    def test_completed_handoff_is_normalized_but_active_worker_still_precedes_it(self) -> None:
+        _, handoff, events = self._fixture()
+        handoff.write_text("---\nstatus:  Completed  \n---\n", encoding="utf-8")
+
+        self.service.scan_once()
+        self.assertEqual(self.service.get_detail("trellis-test-20260714")["status"], "executing")
+
+        self._stop_worker(events)
+        self.service.scan_once()
+        self.assertEqual(self.service.get_detail("trellis-test-20260714")["status"], "done")
+
+    def test_archived_task_supplies_completed_status_and_preserves_original_path(self) -> None:
+        _, handoff, events = self._fixture()
+        task = self._task_path()
+        (task / "task.json").write_text(
+            json.dumps({"name": "归档监听任务", "status": " Completed "}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        handoff.write_text("任务正文说已经完成，但没有结构化状态。", encoding="utf-8")
+        archived = task.parent / "archive" / "2026-07" / task.name
+        archived.parent.mkdir(parents=True)
+        task.rename(archived)
+        self._stop_worker(events)
+
+        self.service.scan_once()
+
+        detail = self.service.get_detail("trellis-test-20260714")
+        self.assertEqual(detail["status"], "done")
+        self.assertEqual(detail["task_name"], "归档监听任务")
+        self.assertEqual(detail["task_path"], str(task))
+        self.assertNotIn("源文件缺失", " ".join(detail["errors"]))
+        self.assertEqual(self.service.search("验收关键词")["total"], 1)
+
+    def test_ambiguous_archive_path_preserves_last_successful_task_snapshot(self) -> None:
+        _, _, events = self._fixture()
+        task = self._task_path()
+        (task / "task.json").write_text(
+            json.dumps({"name": "最后成功快照", "status": "completed"}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        self._stop_worker(events)
+        self.service.scan_once()
+
+        first_archive = task.parent / "archive" / "2026-06" / task.name
+        first_archive.parent.mkdir(parents=True)
+        task.rename(first_archive)
+        self.service.scan_once()
+        self.assertEqual(self.service.get_detail("trellis-test-20260714")["status"], "done")
+
+        second_archive = task.parent / "archive" / "2026-07" / task.name
+        second_archive.mkdir(parents=True)
+        (second_archive / "task.json").write_text('{"name":"错误候选"}', encoding="utf-8")
+        (second_archive / "prd.md").write_text("错误候选内容", encoding="utf-8")
+        self.service.scan_once()
+
+        detail = self.service.get_detail("trellis-test-20260714")
+        self.assertEqual(detail["task_name"], "最后成功快照")
+        self.assertEqual(detail["status"], "done")
+        self.assertEqual(self.service.search("验收关键词")["total"], 1)
+        self.assertIn("多个归档目录", " ".join(detail["errors"]))
 
     def test_unchanged_scan_does_not_reparse_events_or_rebuild_search_index(self) -> None:
         self._fixture()
@@ -262,7 +336,8 @@ class TaskMonitorTest(unittest.TestCase):
         self.assertTrue(all(event["kind"] == "message" for event in recent))
 
     def test_recent_events_are_empty_without_messages(self) -> None:
-        _, _, events = self._fixture()
+        _, handoff, events = self._fixture()
+        handoff.write_text("正文写完成，但没有结构化终态。", encoding="utf-8")
         self._write_events(
             events,
             [
@@ -291,12 +366,37 @@ class TaskMonitorTest(unittest.TestCase):
 
         refollowed = self.service.refollow("trellis-test-20260714")
         self.assertIsNone(refollowed["archived_at"])
-        self.assertEqual(refollowed["archive_due_on"], "2026-08-13")
+        self.assertIsNone(refollowed["archive_due_on"])
         self.assertEqual(self.service.list_runs("ended")["total"], 1)
 
         self.service._now = lambda: datetime(2026, 8, 13, 12, 0, tzinfo=timezone.utc)
         self.service.scan_once()
-        self.assertEqual(self.service.list_runs("archived")["total"], 1)
+        self.assertEqual(self.service.list_runs("archived")["total"], 0)
+        self.assertEqual(self.service.list_runs("ended")["total"], 1)
+
+    def test_manual_archive_survives_status_changes_and_refollow_only_clears_archive(self) -> None:
+        _, handoff, events = self._fixture()
+        task = self._task_path()
+        (task / "task.json").write_text(
+            json.dumps({"name": "监听测试任务", "status": "completed"}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        self.service.scan_once()
+        archived = self.service.archive("trellis-test-20260714")
+        self.assertEqual(archived["group"], "archived")
+        self.assertEqual(archived["status"], "executing")
+
+        handoff.write_text("---\nstatus: blocked\n---\n", encoding="utf-8")
+        self._stop_worker(events)
+        self.service.scan_once()
+        changed = self.service.get_detail("trellis-test-20260714")
+        self.assertEqual(changed["group"], "archived")
+        self.assertEqual(changed["status"], "blocked")
+
+        refollowed = self.service.refollow("trellis-test-20260714")
+        self.assertEqual(refollowed["status"], "blocked")
+        self.assertEqual(refollowed["group"], "ended")
+        self.assertIsNone(refollowed["archive_due_on"])
 
     def test_search_fallback_and_terminal_launcher_use_validated_arguments(self) -> None:
         self._fixture()

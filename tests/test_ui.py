@@ -87,6 +87,12 @@ class FakeBatchUpdateRunner:
 
 
 class TrellisManagerUiTest(unittest.TestCase):
+    def test_task_monitor_service_is_created_without_frontend_scan_callback(self) -> None:
+        with patch("app.api.TaskMonitorService") as monitor_service:
+            TrellisAPI()
+
+        monitor_service.assert_called_once_with()
+
     def test_task_monitor_bridge_returns_structured_input_error(self) -> None:
         monitor = Mock()
         monitor.list_runs.side_effect = TaskMonitorError("invalid_group", "group 无效")

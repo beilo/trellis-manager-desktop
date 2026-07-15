@@ -8,7 +8,7 @@ import shutil
 import sqlite3
 import threading
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -16,7 +16,7 @@ from app.runner import CommandRunner
 
 
 LOGGER = logging.getLogger(__name__)
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 CHANNEL_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 MAX_SOURCE_BYTES = 8 * 1024 * 1024
 TERMINAL_EVENT_KINDS = {"done", "killed", "turn_finished"}
@@ -124,10 +124,24 @@ def _task_name_from_json(text: str, fallback: str) -> str:
     return str(payload.get("name") or payload.get("title") or fallback)
 
 
+def _task_status_from_json(text: str) -> str | None:
+    payload = json.loads(text)
+    if not isinstance(payload, dict):
+        raise AttributeError("task.json 顶层必须是对象")
+    return _normalize_terminal_status(payload.get("status"))
+
+
+def _normalize_terminal_status(value: object) -> str | None:
+    normalized = str(value or "").strip().lower()
+    if normalized == "completed":
+        return "done"
+    return normalized if normalized in {"done", "blocked", "failed", "partial"} else None
+
+
 def _status_group(status: str, archived_at: str | None) -> str:
     if archived_at:
         return "archived"
-    return "ended" if status == "done" else "ongoing"
+    return "ended" if status in {"done", "blocked", "failed", "partial"} else "ongoing"
 
 
 def _status_priority(status: str) -> int:
@@ -151,7 +165,7 @@ class TaskMonitorService:
         runs_root: Path | None = None,
         channels_root: Path | None = None,
         now: Callable[[], datetime] = _utc_now,
-        scan_interval: float = 5.0,
+        scan_interval: float = 60.0,
         runner: CommandRunner | None = None,
     ) -> None:
         self.db_path = (db_path or default_database_path()).expanduser()
@@ -165,7 +179,6 @@ class TaskMonitorService:
         self._thread: threading.Thread | None = None
         self._initialized = False
         self._fts_enabled = False
-        self._last_archive_check: date | None = None
 
     def _connect(self) -> sqlite3.Connection:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -212,7 +225,9 @@ class TaskMonitorService:
                     project_path TEXT NOT NULL,
                     project_name TEXT NOT NULL,
                     task_path TEXT NOT NULL,
+                    resolved_task_path TEXT,
                     task_name TEXT NOT NULL,
+                    task_status TEXT,
                     worker TEXT NOT NULL,
                     provider TEXT NOT NULL,
                     sent_at TEXT,
@@ -261,6 +276,10 @@ class TaskMonitorService:
                 connection.execute("ALTER TABLE monitor_runs ADD COLUMN worker_stopped INTEGER NOT NULL DEFAULT 0")
             if "last_event_at" not in columns:
                 connection.execute("ALTER TABLE monitor_runs ADD COLUMN last_event_at TEXT")
+            if "resolved_task_path" not in columns:
+                connection.execute("ALTER TABLE monitor_runs ADD COLUMN resolved_task_path TEXT")
+            if "task_status" not in columns:
+                connection.execute("ALTER TABLE monitor_runs ADD COLUMN task_status TEXT")
             try:
                 connection.execute(
                     """
@@ -341,7 +360,6 @@ class TaskMonitorService:
                             "UPDATE monitor_runs SET run_error=?, updated_at=? WHERE channel=?",
                             (f"扫描失败：{error}", now_iso, channel),
                         )
-                self._auto_archive(connection, now.date())
 
     def _scan_run_source(
         self,
@@ -431,6 +449,24 @@ class TaskMonitorService:
         except (OSError, UnicodeDecodeError, ValueError) as error:
             return old_text, "error", f"源文件读取失败：{error}", True
 
+    def _resolve_task_directory(self, task_path: str) -> tuple[Path | None, str | None]:
+        if not task_path:
+            return None, "未提供 task 路径"
+        source = Path(task_path).expanduser()
+        if source.is_dir():
+            return source, None
+        archive_root = source.parent / "archive"
+        candidates = sorted(
+            candidate
+            for candidate in archive_root.glob(f"*/{source.name}")
+            if candidate.is_dir() and re.fullmatch(r"\d{4}-\d{2}", candidate.parent.name)
+        )
+        if len(candidates) == 1:
+            return candidates[0], None
+        if not candidates:
+            return None, f"task 源目录缺失，且未找到标准归档目录：{source}"
+        return None, f"task 源目录缺失，找到多个归档目录：{', '.join(str(path) for path in candidates)}"
+
     def _refresh_channel(
         self,
         connection: sqlite3.Connection,
@@ -456,26 +492,53 @@ class TaskMonitorService:
         old_value = (lambda key, fallback="": old[key] if old is not None else fallback)
 
         task_path = str(payload.get("task", ""))
-        task_json_path = str(Path(task_path) / "task.json") if task_path else None
-        prd_path = str(Path(task_path) / "prd.md") if task_path else None
-        same_task_path = old is not None and old["task_path"] == task_path
-        task_json, task_fp, task_error, _ = self._read_cached_text(
-            task_json_path, old_value("task_fingerprint", None) if same_task_path else None, old_value("task_json")
+        resolved_task_path, resolution_error = self._resolve_task_directory(task_path)
+        resolved_task_value = str(resolved_task_path) if resolved_task_path else None
+        same_task_source = (
+            old is not None
+            and old["task_path"] == task_path
+            and old["resolved_task_path"] == resolved_task_value
         )
-        prd_text, prd_fp, prd_error, _ = self._read_cached_text(
-            prd_path, old_value("prd_fingerprint", None) if same_task_path else None, old_value("prd_text")
-        )
-        task_changed = old is None or not same_task_path or task_fp != old_value("task_fingerprint", None)
-        prd_changed = old is None or not same_task_path or prd_fp != old_value("prd_fingerprint", None)
+        if resolved_task_path is None:
+            task_json = old_value("task_json")
+            prd_text = old_value("prd_text")
+            task_fp = old_value("task_fingerprint", None)
+            prd_fp = old_value("prd_fingerprint", None)
+            task_error = resolution_error
+            prd_error = resolution_error
+            task_changed = False
+            prd_changed = False
+        else:
+            task_json, task_fp, task_error, _ = self._read_cached_text(
+                str(resolved_task_path / "task.json"),
+                old_value("task_fingerprint", None) if same_task_source else None,
+                old_value("task_json"),
+            )
+            prd_text, prd_fp, prd_error, _ = self._read_cached_text(
+                str(resolved_task_path / "prd.md"),
+                old_value("prd_fingerprint", None) if same_task_source else None,
+                old_value("prd_text"),
+            )
+            task_changed = old is None or not same_task_source or task_fp != old_value("task_fingerprint", None)
+            prd_changed = old is None or not same_task_source or prd_fp != old_value("prd_fingerprint", None)
         task_name = old_value("task_name", "") or _fallback_task_name(task_path, channel)
+        task_status = old_value("task_status", None)
         if task_changed and task_error is None:
             try:
                 task_name = _task_name_from_json(task_json, task_name)
+                task_status = _task_status_from_json(task_json) or ""
+            except (json.JSONDecodeError, AttributeError) as error:
+                task_error = f"task.json 解析失败：{error}"
+        elif old is not None and task_status is None and task_json and task_error is None:
+            # schema v2 首次重扫旧快照时补投影，不要求源文件指纹变化。
+            try:
+                task_status = _task_status_from_json(task_json) or ""
             except (json.JSONDecodeError, AttributeError) as error:
                 task_error = f"task.json 解析失败：{error}"
         elif not task_changed:
             old_task_error = old_value("task_error", None)
-            task_error = old_task_error if str(old_task_error or "").startswith("task.json") else None
+            if resolution_error is None:
+                task_error = old_task_error if str(old_task_error or "").startswith("task.json") else None
         if prd_error and not task_error:
             task_error = f"prd.md：{prd_error}"
         elif not prd_changed and not task_error:
@@ -490,9 +553,7 @@ class TaskMonitorService:
         handoff_changed = old is None or not same_handoff_path or handoff_fp != old_value("handoff_fingerprint", None)
         if handoff_changed:
             handoff_payload = _parse_frontmatter(handoff_text)
-            handoff_status = handoff_payload.get("status")
-            if handoff_status not in {"done", "blocked", "failed", "partial"}:
-                handoff_status = None
+            handoff_status = _normalize_terminal_status(handoff_payload.get("status"))
             handoff_created = _parse_datetime(handoff_payload.get("created_at"))
         else:
             handoff_status = old_value("handoff_status", None)
@@ -524,6 +585,7 @@ class TaskMonitorService:
         display_status = self._resolve_status(
             old_status=old_status,
             handoff_status=handoff_status,
+            task_status=task_status or None,
             active=bool(event_state["active"]) if channel_available else False,
             stopped=bool(event_state["stopped"]) if channel_available else False,
             channel_available=channel_available,
@@ -539,11 +601,6 @@ class TaskMonitorService:
         first_imported_on = old_value("first_imported_on", now.date().isoformat())
         attention_started_on = old_value("attention_started_on", None)
         archive_due_on = old_value("archive_due_on", None)
-        if display_status == "done" and not attention_started_on:
-            # 首次导入历史完成项以导入日开始；运行中项目转为完成时使用完成日。
-            start_date = now.date() if old is None else (handoff_created or event_time or now).astimezone().date()
-            attention_started_on = start_date.isoformat()
-            archive_due_on = (start_date + timedelta(days=30)).isoformat()
 
         relevant_times = [value for value in (source_time, event_time, handoff_created) if value]
         updated_at = _iso(max(relevant_times)) if relevant_times else old_value("updated_at", _iso(now))
@@ -558,7 +615,7 @@ class TaskMonitorService:
             """
             INSERT INTO monitor_runs(
                 channel, source_path, record_conflict, project_path, project_name,
-                task_path, task_name, worker, provider, sent_at, handoff_path,
+                task_path, resolved_task_path, task_name, task_status, worker, provider, sent_at, handoff_path,
                 display_status, handoff_status, completed_at, source_available,
                 channel_available, run_error, task_error, handoff_error, channel_error,
                 task_fingerprint, prd_fingerprint, handoff_fingerprint, events_fingerprint,
@@ -566,14 +623,16 @@ class TaskMonitorService:
                 event_summary, worker_active, worker_stopped, last_event_at,
                 archived_at, attention_started_on, archive_due_on,
                 first_imported_on, updated_at
-            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(channel) DO UPDATE SET
                 source_path=excluded.source_path,
                 record_conflict=excluded.record_conflict,
                 project_path=excluded.project_path,
                 project_name=excluded.project_name,
                 task_path=excluded.task_path,
+                resolved_task_path=excluded.resolved_task_path,
                 task_name=excluded.task_name,
+                task_status=excluded.task_status,
                 worker=excluded.worker,
                 provider=excluded.provider,
                 sent_at=excluded.sent_at,
@@ -601,8 +660,6 @@ class TaskMonitorService:
                 worker_active=excluded.worker_active,
                 worker_stopped=excluded.worker_stopped,
                 last_event_at=excluded.last_event_at,
-                attention_started_on=excluded.attention_started_on,
-                archive_due_on=excluded.archive_due_on,
                 updated_at=excluded.updated_at
             """,
             (
@@ -612,7 +669,9 @@ class TaskMonitorService:
                 project_path,
                 _project_name(project_path),
                 task_path,
+                resolved_task_value,
                 task_name,
+                task_status,
                 str(payload.get("worker", "")),
                 str(payload.get("provider", "")),
                 sent_at,
@@ -733,21 +792,22 @@ class TaskMonitorService:
         *,
         old_status: str | None,
         handoff_status: str | None,
+        task_status: str | None,
         active: bool,
         stopped: bool,
         channel_available: bool,
         run_status: str,
     ) -> str:
-        if old_status == "done" or handoff_status == "done":
+        if old_status == "done":
             return "done"
         if active:
             return "executing"
         if stopped:
-            return handoff_status or "waiting_result"
+            return handoff_status or task_status or "waiting_result"
         if channel_available:
             return "waiting_worker"
-        if handoff_status:
-            return handoff_status
+        if handoff_status or task_status:
+            return handoff_status or task_status or "unknown"
         return "sent" if run_status == "sent" else "unknown"
 
     def _update_search_index(self, connection: sqlite3.Connection, channel: str) -> None:
@@ -778,26 +838,7 @@ class TaskMonitorService:
             ),
         )
 
-    def _auto_archive(self, connection: sqlite3.Connection, today: date) -> None:
-        if self._last_archive_check == today:
-            return
-        now_iso = _iso(self._now())
-        connection.execute(
-            """
-            UPDATE monitor_runs
-            SET archived_at=?
-            WHERE display_status='done'
-              AND archived_at IS NULL
-              AND archive_due_on IS NOT NULL
-              AND archive_due_on <= ?
-            """,
-            (now_iso, today.isoformat()),
-        )
-        self._last_archive_check = today
-
     def _row_to_item(self, row: sqlite3.Row) -> dict[str, Any]:
-        due = date.fromisoformat(row["archive_due_on"]) if row["archive_due_on"] else None
-        days_remaining = max(0, (due - self._now().date()).days) if due and not row["archived_at"] else None
         errors = [
             value
             for value in (row["run_error"], row["task_error"], row["handoff_error"], row["channel_error"])
@@ -819,7 +860,7 @@ class TaskMonitorService:
             "updated_at": row["updated_at"],
             "archived_at": row["archived_at"],
             "archive_due_on": row["archive_due_on"],
-            "archive_days_remaining": days_remaining,
+            "archive_days_remaining": None,
             "event_summary": row["event_summary"],
             "record_conflict": bool(row["record_conflict"]),
             "source_available": bool(row["source_available"]),
@@ -884,15 +925,10 @@ class TaskMonitorService:
     def refollow(self, channel: str) -> dict[str, Any]:
         self._validate_channel(channel)
         self._ensure_schema()
-        today = self._now().date()
         with self._connection() as connection:
             changed = connection.execute(
-                """
-                UPDATE monitor_runs
-                SET archived_at=NULL, attention_started_on=?, archive_due_on=?
-                WHERE channel=?
-                """,
-                (today.isoformat(), (today + timedelta(days=30)).isoformat(), channel),
+                "UPDATE monitor_runs SET archived_at=NULL WHERE channel=?",
+                (channel,),
             ).rowcount
         if not changed:
             raise TaskMonitorError("not_found", "任务监听记录不存在")
