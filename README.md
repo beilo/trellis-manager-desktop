@@ -94,6 +94,18 @@ python3 launcher.py
 
 zip 安装的源码仍然是源码（不是预构建 CLI），因此仍然需要本地有可用的 `node` 和 `pnpm` 来执行依赖安装和构建。
 
+维护者本机已经有更新后的 CLI 源码时，可以直接从本地源码树生成 Manager 可安装的 zip：
+
+```bash
+python3 scripts/package_local_trellis_zip.py
+# 或显式指定 Trellis CLI 源码目录
+python3 scripts/package_local_trellis_zip.py ~/.beilo-trellis/Trellis
+# 只做本机 CLI 安装验证时，可排除体积较大的顶层 assets/
+npm run package:trellis-zip:fast
+```
+
+脚本会输出 `dist/trellis-source-zips/*.zip` 路径。它保留工作区里的本地源码改动，但排除 `.git`、`node_modules` 和构建缓存目录，方便在「本地源码 zip 安装」里直接选择该 zip 重装验证。
+
 ## 打包轻量 `.app`
 
 先构建前端：
