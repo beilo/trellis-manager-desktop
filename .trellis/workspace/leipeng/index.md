@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 15
-- **Last Active**: 2026-07-14
+- **Total Sessions**: 16
+- **Last Active**: 2026-07-15
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~535 | Active |
+| `journal-1.md` | ~568 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 16 | 2026-07-15 | 修复任务监听状态、归档与轮询 | `84f6203` | `main` |
 | 15 | 2026-07-14 | 过滤任务详情工具消息 | `49bd146` | `main` |
 | 14 | 2026-07-14 | 任务详情复制基础信息 | `ad8e61b` | `main` |
 | 13 | 2026-07-14 | Copy task check prompt | `701f453` | `main` |

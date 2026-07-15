@@ -533,3 +533,36 @@ Added a task monitor action that copies a read-only diagnostic prompt from loade
 ### Next Steps
 
 - None - task complete
+
+
+## Session 16: 修复任务监听状态、归档与轮询
+
+**Date**: 2026-07-15
+**Task**: 修复任务监听状态、归档与轮询
+**Branch**: `main`
+
+### Summary
+
+支持 archived task 路径回退和 completed 终态归一化；取消自动归档与扫描 callback；前端改为 5 秒 SQLite 轮询并增加请求竞态保护。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `84f6203` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
