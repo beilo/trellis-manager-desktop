@@ -1,0 +1,19 @@
+package.json
+  s_f3cc778168a497::t_cfa2722bba95c5 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "4ce21d3903ae16bd25705f4d8e18ff88f742f540",
+  "prompts": {},
+  "sessions": {
+    "s_f3cc778168a497": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f656a-cabf-7631-9985-7628106fa952",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "leipeng <leipeng950504@gmail.com>"
+    }
+  }
+}
